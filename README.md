@@ -57,6 +57,84 @@ The project demonstrates how concurrent financial transactions are processed saf
   - Query parameterization and input escaping against injection.
   - Defense-in-depth: Application balance pre-validation + MySQL `CHECK (balance >= 0.00)` constraint enforcement.
 
+### Day 3 Completed (Concurrency & Synchronization)
+- **Multithreading with `std::thread`**:
+  - Independent concurrent worker threads dispatching payment transfers and withdrawals simultaneously.
+  - Real concurrency: All threads launched before joining, eliminating serialized thread execution.
+- **Mutual Exclusion & Critical Sections**:
+  - Critical section guarding shared account state using `std::mutex` and `std::lock_guard<std::mutex>`.
+  - Elimination of manual lock/unlock leaks via RAII.
+- **Controlled Race Condition Demonstration**:
+  - Safe in-memory demonstration proving WHY synchronization is needed:
+    - *Without Mutex*: Concurrent withdrawals suffer Time-of-Check to Time-of-Use (TOCTOU) races, driving balance into an illegal negative state (₹-3,000).
+    - *With Mutex*: Critical section serializes balance check and debit, approving one withdrawal and safely rejecting the second (balance preserved at ₹3,000).
+- **Thread Lifecycle & State Tracking**:
+  - Complete state transitions: `CREATED` -> `WAITING FOR MUTEX` -> `RUNNING` -> `COMPLETED` / `FAILED`.
+- **Thread-Safe Console Logging**:
+  - Dedicated static logging mutex (`consoleMutex_`) prevents interleaved terminal output across concurrent worker threads.
+- **Multi-Client Database Connection Isolation**:
+  - Dedicated per-thread `DatabaseManager` instances; each worker thread possesses its own MySQL connection handle and transaction context.
+- **Performance Benchmarking**:
+  - `std::chrono` runtime instrumentation tracking thread counts, execution times (ms), and transaction success/failure ratios.
+
+---
+
+## Day 3 — Concurrency & Synchronization Architecture
+
+### 1. Why Concurrency is Required
+High-throughput payment networks (like UPI, Visa, or banking gateways) process thousands of transaction requests simultaneously. Running transactions sequentially on a single thread causes massive latency spikes and underutilizes modern multi-core CPUs. Multithreading enables concurrent transaction processing.
+
+### 2. How `std::thread` is Used
+Each incoming payment request is assigned to an independent `std::thread` instance. The processor launches all worker threads concurrently into the thread scheduler before synchronizing their completion using `.join()`.
+
+### 3. What the Critical Section is
+The critical section is the code segment where shared account state is inspected and modified. If multiple threads concurrently read an account balance, verify solvency, and execute debits without synchronization, both may pass the solvency check simultaneously, producing an overdraft.
+
+### 4. Why Mutex is Required
+A mutual exclusion lock (`std::mutex`) ensures that only one thread can execute within the critical section at any given time. If Thread 1 holds the lock, Thread 2 must wait until Thread 1 finishes and releases the lock.
+
+### 5. How Thread Synchronization Works
+We use `std::lock_guard<std::mutex>` (RAII). When a thread enters the critical section, it automatically acquires the mutex. When the scope exits (whether via regular return or exception), the mutex is automatically released, preventing deadlocks or abandoned locks.
+
+### 6. How Threads Interact with MySQL Transactions
+Each thread obtains its own isolated MySQL connection. Inside the synchronized critical section, the thread invokes `TransactionManager`, which executes `START TRANSACTION;`, updates sender and receiver balances, logs the operation in `transaction_logs`, and issues `COMMIT;` (or `ROLLBACK;`).
+
+### 7. Key Distinction: Mutex vs. Database Transactions
+| Concept | Scope | Problem Solved |
+|---|---|---|
+| **`std::mutex` (OS)** | C++ Application Memory | Prevents CPU-level race conditions and TOCTOU bugs across competing worker threads in application memory. |
+| **MySQL Transactions (DBMS)** | Database Engine (InnoDB) | Provides ACID guarantees (Atomicity, Consistency, Isolation levels, and disk Durability via WAL) across DB clients. |
+
+### 8. How Race Conditions are Prevented
+Race conditions are eliminated by serializing the "Check-Then-Act" sequence inside the critical section. A thread cannot be preempted between checking a balance and recording the debit.
+
+```text
+                    Concurrent Payment Requests
+                                 │
+           ┌─────────────────────┼─────────────────────┐
+           ▼                     ▼                     ▼
+     Worker Thread 1       Worker Thread 2       Worker Thread 3
+     (Dedicated DB Conn)   (Dedicated DB Conn)   (Dedicated DB Conn)
+           │                     │                     │
+           └─────────────────────┼─────────────────────┘
+                                 ▼
+                    [OS Application Layer]
+                   std::mutex (Critical Section)
+                     - Only 1 thread enters
+                     - Serializes balance check & debit
+                                 │
+                                 ▼
+                     TransactionManager
+                                 │
+                                 ▼
+                    [DBMS Storage Layer]
+                     MySQL Transaction
+                     - START TRANSACTION
+                     - Debit & Credit
+                     - Write-Ahead Log
+                     - COMMIT / ROLLBACK
+```
+
 ---
 
 ## How PayLock Handles a Payment
@@ -149,6 +227,9 @@ PayLock/
 │   └── seed.sql                # Seed data for testing
 ├── src/
 │   ├── main.cpp                # Terminal demonstration entry point
+│   ├── concurrency/
+│   │   ├── ConcurrentTransactionProcessor.h   # Multithreading, mutex & race condition orchestrator
+│   │   └── ConcurrentTransactionProcessor.cpp # Thread lifecycle & sync implementation
 │   ├── database/
 │   │   ├── DatabaseManager.h   # MySQL connection & query interface
 │   │   └── DatabaseManager.cpp # Implementation with RAII & mutex locking
@@ -161,7 +242,7 @@ PayLock/
 │       ├── TransactionManager.h   # High-level transaction manager
 │       └── TransactionManager.cpp # Business orchestration
 └── tests/
-    └── test_db.cpp             # Unit & constraint verification tests
+    └── test_db.cpp             # Unit, integration & concurrency tests
 ```
 
 ---

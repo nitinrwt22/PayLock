@@ -36,7 +36,10 @@ PayLock/
 │   ├── schema.sql              # Table definitions and constraints
 │   └── seed.sql                # Initial test users & accounts
 ├── src/                        # Core C++ implementation
-│   ├── main.cpp                # Day 1 verification entry point
+│   ├── main.cpp                # Day 3 verification entry point
+│   ├── concurrency/            # Day 3 Concurrency & OS Layer
+│   │   ├── ConcurrentTransactionProcessor.h
+│   │   └── ConcurrentTransactionProcessor.cpp
 │   ├── database/
 │   │   ├── DatabaseManager.h   # MySQL C client wrapper & RAII lifecycle
 │   │   └── DatabaseManager.cpp
@@ -49,25 +52,26 @@ PayLock/
 │       ├── TransactionManager.h   # Business layer transaction orchestrator
 │       └── TransactionManager.cpp
 └── tests/
-    └── test_db.cpp             # Automated integration tests
+    └── test_db.cpp             # Automated integration & concurrency tests
 ```
 
 ---
 
-## Day 2 Completed: Core ACID Transaction Engine
-The core business transaction orchestrator has been completed:
-1. `TransactionManager::transfer(senderId, receiverId, amount)` with complete ACID semantics.
-2. `TransactionManager::deposit(accountId, amount)` & `withdraw(accountId, amount)`.
-3. `DatabaseManager::beginTransaction()`, `commit()`, `rollback()`.
-4. Automated balance validation, exact `DECIMAL(15, 2)` arithmetic, and DBMS constraint enforcement.
-5. Write-Ahead Logging in `transaction_logs` capturing lifecycle events: `TRANSFER_STARTED`, `SENDER_BALANCE_DEBITED`, `RECEIVER_BALANCE_CREDITED`, `TRANSACTION_COMMITTED`, `TRANSACTION_ROLLED_BACK`.
-6. Controlled failure handling demonstrating MySQL transaction rollback and data atomicity.
+## Day 3 Completed: Concurrency, Multithreading & Synchronization
+The OS concurrency layer is fully operational and integrated with MySQL:
+1. `ConcurrentTransactionProcessor` coordinating worker threads via `std::thread`.
+2. Critical section protection via `std::mutex` and `std::lock_guard`.
+3. In-memory Race Condition demonstration contrasting unsynchronized TOCTOU races with mutex-protected mutual exclusion.
+4. Per-thread isolated database connections preventing socket contention.
+5. Real concurrent transfer processing across accounts with programmatic balance verification against MySQL.
+6. Same-account concurrent withdrawal contention and overdraft rejection.
+7. Thread-safe atomic console logging via dedicated `consoleMutex_`.
+8. Execution performance measurement using `std::chrono`.
 
 ---
 
-## Forward Compatibility for Day 3 Sprint
-Day 3 will introduce OS concurrency and multithreading:
-1. Concurrent payment requests using `std::thread`.
-2. Shared account access with `std::mutex` and critical section protection.
-3. Race condition demonstration (unsynchronized vs. synchronized).
-4. OS thread scheduling integrated with MySQL transactional concurrency.
+## Forward Compatibility for Day 4 Sprint
+Day 4 will introduce Deadlock Handling & Advanced Lock Management:
+1. Deadlock detection via Wait-For Graph (WFG) cycle detection.
+2. Deadlock resolution via victim transaction abort & rollback.
+3. Fine-grained row-level / account-level locking protocols.

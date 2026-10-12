@@ -53,6 +53,7 @@ link_directories(
 set(PAYLOCK_CORE_SOURCES
     src/database/DatabaseManager.cpp
     src/transaction/TransactionManager.cpp
+    src/concurrency/ConcurrentTransactionProcessor.cpp
 )
 
 # Main Executable

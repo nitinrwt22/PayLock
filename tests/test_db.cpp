@@ -1,11 +1,12 @@
 #include "../src/database/DatabaseManager.h"
 #include "../src/transaction/TransactionManager.h"
+#include "../src/concurrency/ConcurrentTransactionProcessor.h"
 #include <iostream>
 #include <cassert>
 #include <ctime>
 
 void runTests() {
-    std::cout << "[TEST RUNNER] Starting Day 1 & Day 2 PayLock Automated Tests...\n";
+    std::cout << "[TEST RUNNER] Starting Day 1, Day 2 & Day 3 PayLock Automated Tests...\n";
 
     paylock::DatabaseConfig config = paylock::DatabaseConfig::fromEnvOrDefault();
     paylock::DatabaseManager db(config);
@@ -115,7 +116,68 @@ void runTests() {
     assert(!allLogs.empty());
     std::cout << "PASSED (" << allLogs.size() << " log records verified)\n";
 
-    std::cout << "\n[ALL 11 UNIT & INTEGRATION TESTS PASSED SUCCESSFULLY!]\n";
+    // =========================================================================
+    // DAY 3 CONCURRENCY & MULTITHREADING TESTS
+    // =========================================================================
+
+    std::cout << "\n--- DAY 3 CONCURRENCY & SYNCHRONIZATION TESTS ---\n";
+    paylock::ConcurrentTransactionProcessor processor(config);
+
+    // Test 12: Concurrent Multi-Threaded Transfers
+    std::cout << "Test 12: Concurrent Transfers (4 threads, real DB connections)... ";
+    db.executeQuery("UPDATE accounts SET balance = 10000.00 WHERE account_id = 101;");
+    db.executeQuery("UPDATE accounts SET balance = 5000.00 WHERE account_id = 102;");
+    db.executeQuery("UPDATE accounts SET balance = 7000.00 WHERE account_id = 103;");
+
+    std::vector<paylock::TransferRequest> requests = {
+        {"T1", 101, 102, 2000.00},
+        {"T2", 101, 103, 3000.00},
+        {"T3", 102, 103, 1000.00},
+        {"T4", 103, 101,  500.00}
+    };
+    auto metrics = processor.processConcurrentTransfers(requests);
+    assert(metrics.successfulTransactions == 4);
+
+    auto b101_final = db.getAccountBalance(101).value_or(0.0);
+    auto b102_final = db.getAccountBalance(102).value_or(0.0);
+    auto b103_final = db.getAccountBalance(103).value_or(0.0);
+
+    assert(b101_final == 5500.00);
+    assert(b102_final == 6000.00);
+    assert(b103_final == 10500.00);
+    std::cout << "PASSED (All 4 threads completed: 101=₹5500, 102=₹6000, 103=₹10500 in " 
+              << metrics.executionTimeMs << " ms)\n";
+
+    // Test 13: Same-Account Concurrent Contention (3 concurrent withdrawals on Account 101)
+    std::cout << "Test 13: Same-Account Concurrent Contention (3 withdrawals on Account 101)... ";
+    db.executeQuery("UPDATE accounts SET balance = 10000.00 WHERE account_id = 101;");
+    std::vector<paylock::WithdrawalRequest> wRequests = {
+        {"T1", 101, 2000.00},
+        {"T2", 101, 3000.00},
+        {"T3", 101, 4000.00}
+    };
+    auto wMetrics = processor.processConcurrentWithdrawals(wRequests);
+    assert(wMetrics.successfulTransactions == 3);
+    auto b101_afterW = db.getAccountBalance(101).value_or(0.0);
+    assert(b101_afterW == 1000.00);
+    std::cout << "PASSED (Account 101 correctly debited to ₹1000)\n";
+
+    // Test 14: Concurrent Overdraft Contention (Total ₹13,000 requested on ₹10,000 balance)
+    std::cout << "Test 14: Concurrent Overdraft Contention (Exactly 1 succeeds, 1 rejected)... ";
+    db.executeQuery("UPDATE accounts SET balance = 10000.00 WHERE account_id = 101;");
+    std::vector<paylock::WithdrawalRequest> odRequests = {
+        {"T1", 101, 7000.00},
+        {"T2", 101, 6000.00}
+    };
+    auto odMetrics = processor.processConcurrentWithdrawals(odRequests);
+    assert(odMetrics.successfulTransactions == 1);
+    assert(odMetrics.failedTransactions == 1);
+    auto b101_od = db.getAccountBalance(101).value_or(0.0);
+    assert(b101_od == 3000.00 || b101_od == 4000.00);
+    std::cout << "PASSED (Overdraft prevented: 1 successful, 1 failed, balance remains ₹" 
+              << b101_od << ")\n";
+
+    std::cout << "\n[ALL 14 UNIT, INTEGRATION & CONCURRENCY TESTS PASSED SUCCESSFULLY!]\n";
 }
 
 int main() {
