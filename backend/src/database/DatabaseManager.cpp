@@ -283,6 +283,42 @@ std::vector<Transaction> DatabaseManager::listTransactions() {
     return transactions;
 }
 
+std::vector<Transaction> DatabaseManager::getTransactionsForAccount(int accountId) {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    ensureConnected();
+
+    std::string sql = "SELECT transaction_id, sender_account, receiver_account, amount, status, created_at "
+                      "FROM transactions "
+                      "WHERE sender_account = " + std::to_string(accountId) + " "
+                      "   OR receiver_account = " + std::to_string(accountId) + " "
+                      "ORDER BY transaction_id ASC;";
+
+    if (mysql_query(conn_, sql.c_str()) != 0) {
+        throw DatabaseException("Failed to get transactions for account " + std::to_string(accountId) + 
+                                ": " + std::string(mysql_error(conn_)), mysql_errno(conn_));
+    }
+
+    MYSQL_RES* res = mysql_store_result(conn_);
+    if (!res) {
+        throw DatabaseException("Failed to store result: " + std::string(mysql_error(conn_)), mysql_errno(conn_));
+    }
+
+    std::vector<Transaction> transactions;
+    MYSQL_ROW row;
+    while ((row = mysql_fetch_row(res)) != nullptr) {
+        int txId = std::stoi(row[0]);
+        int sender = (row[1] != nullptr) ? std::stoi(row[1]) : 0;
+        int receiver = (row[2] != nullptr) ? std::stoi(row[2]) : 0;
+        double amount = row[3] ? std::stod(row[3]) : 0.0;
+        std::string status = row[4] ? row[4] : "";
+        std::string created = row[5] ? row[5] : "";
+        transactions.emplace_back(txId, sender, receiver, amount, status, created);
+    }
+
+    mysql_free_result(res);
+    return transactions;
+}
+
 int DatabaseManager::recordTransaction(int senderAccount, int receiverAccount, double amount, const std::string& status) {
     std::lock_guard<std::mutex> lock(dbMutex_);
     ensureConnected();

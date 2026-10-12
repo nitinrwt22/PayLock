@@ -115,7 +115,7 @@ PayLock/
 │   └── procedures.sql      # Stored procedures (sp_transfer_funds)
 │
 ├── tests/
-│   └── test_db.cpp         # Comprehensive 19-test automated test suite
+│   └── test_db.cpp         # Comprehensive 22-test automated test suite
 │
 ├── frontend/
 │   ├── index.html          # Interactive dark-mode dashboard
@@ -163,6 +163,55 @@ PayLock/
 | **ResourceManager** | Virtual address to page translation and resource allocation stub | **[IN PROGRESS / STUBBED]** |
 | **Frontend Prototype** | Interactive web dashboard visualizing balances, threads, and logs | **[BUILT (Prototype)]** |
 | **REST API Layer** | Embedded HTTP server exposing `/api/transactions` and `/api/locks` | **[PLANNED]** |
+
+---
+
+## Transaction Engine
+
+PayLock's core payment engine (`TransactionManager`) manages financial operations with strict ACID compliance:
+
+### 1. Operations Supported
+- **Peer-to-Peer Transfer (`transfer(senderId, receiverId, amount)`)**:
+  - Validates amount (> 0), account existence, and distinct accounts.
+  - Verifies sender balance using integer-cent arithmetic (`toCents()`).
+  - Initiates atomic MySQL transaction (`START TRANSACTION;`).
+  - Debits sender, credits receiver, writes audit logs to `transaction_logs`.
+  - Commits transaction (`COMMIT;`) and updates status to `COMMITTED`.
+  - On any failure: Immediately executes `ROLLBACK;`, leaving balances completely intact.
+- **Deposit (`deposit(accountId, amount)`)**:
+  - Validates account existence and positive amount.
+  - Credits account inside an atomic transaction; logs external source (`sender_account = NULL`).
+  - Commits transaction permanently to MySQL.
+- **Withdrawal (`withdraw(accountId, amount)`)**:
+  - Validates account existence, amount, and verifies `balance >= amount`.
+  - If insufficient funds: Rejects without modifying ledger, marks transaction as `FAILED`, and logs warning.
+  - If balance is sufficient: Debits account and commits transaction.
+
+### 2. Transaction Lifecycle & Status Transitions
+- `PENDING` -> `ACTIVE` (in-flight) -> `COMMITTED` (successful)
+- `PENDING` -> `ACTIVE` -> `ROLLED_BACK` (aborted after start)
+- `PENDING` -> `FAILED` (rejected before balance modification)
+
+### 3. ACID Behavior Preserved
+- **Atomicity**: Either debit and credit both succeed, or `ROLLBACK` reverts partial changes. Verified via `demonstrateControlledRollback()`.
+- **Consistency**: Enforced via relational foreign keys (`fk_tx_sender`, `fk_tx_receiver`) and MySQL check constraints (`chk_account_balance`, `chk_tx_amount`).
+- **Isolation**: Row-level transaction scoping within MySQL InnoDB prevents uncommitted state leakage.
+- **Durability**: Committed data is durably flushed to disk via MySQL InnoDB's Write-Ahead Log (WAL) redo logs.
+
+### 4. Transaction History API
+- `getTransaction(int transactionId)`: Retrieve a single transaction record by ID.
+- `getTransactions()` / `getAllTransactions()`: Retrieve complete chronological ledger history.
+- `getTransactionsForAccount(int accountId)`: Retrieve filtered history for a specific account.
+- `getTransactionLogs(int transactionId)`: Retrieve granular WAL audit trail for a transaction.
+
+### 5. Controlled Rollback Demonstration
+The engine includes a dedicated proof method (`demonstrateControlledRollback(senderId, receiverId, amount)`) for college evaluation:
+1. Records initial balances of Account 101 and Account 102.
+2. Starts MySQL transaction and creates an `ACTIVE` transaction record.
+3. Debits Account 101.
+4. Intentionally triggers a simulated catastrophic failure before crediting Account 102.
+5. Catches exception and executes MySQL `ROLLBACK;`.
+6. Re-queries MySQL balances, proving that Account 101 was restored to its exact original balance and Account 102 was never touched.
 
 ---
 

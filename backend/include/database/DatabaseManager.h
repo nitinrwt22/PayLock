@@ -102,6 +102,7 @@ public:
     // Day 2 Transaction Query & Lifecycle Operations:
     bool updateTransactionStatus(int transactionId, const std::string& status);
     std::optional<Transaction> getTransactionById(int transactionId);
+    std::vector<Transaction> getTransactionsForAccount(int accountId);
     std::vector<TransactionLog> listTransactionLogs(int transactionId = 0);
 
     // Day 2 Transaction Control Primitives (ACID Foundations)

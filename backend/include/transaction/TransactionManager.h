@@ -2,6 +2,9 @@
 #define PAYLOCK_TRANSACTION_MANAGER_H
 
 #include "database/DatabaseManager.h"
+#include "models/Transaction.h"
+#include "models/Account.h"
+#include "models/TransactionLog.h"
 #include <memory>
 #include <vector>
 #include <optional>
@@ -10,18 +13,18 @@
 namespace paylock {
 
 /**
- * @brief TransactionManager acts as the coordinator for core payment business transactions.
+ * @brief TransactionManager coordinates core financial business transactions.
  * 
- * Day 2 Implementation:
- * - Orchestrates atomic financial operations (transfer, deposit, withdraw).
- * - Implements MySQL transaction lifecycle: START TRANSACTION -> Operations -> COMMIT / ROLLBACK.
- * - Enforces ACID properties (Atomicity, Consistency, Durability, single-threaded Isolation foundation).
- * - Manages transaction states: PENDING, PROCESSING, COMMITTED, ROLLED_BACK, FAILED.
- * - Records detailed audit logs in transaction_logs for full traceability.
+ * Enforces ACID properties in conjunction with DatabaseManager:
+ * - Atomicity: Entire transfer, deposit, or withdrawal commits or rolls back as a unit.
+ * - Consistency: Balances are checked, non-negative constraints enforced, and accounts validated.
+ * - Isolation: Database transactions prevent dirty reads and uncommitted state exposure.
+ * - Durability: MySQL InnoDB engine guarantees committed transactions persist.
  * 
- * Day 3 Readiness:
- * - Thread-ready design: Operations rely on the thread-safe DatabaseManager infrastructure.
- * - Decoupled business logic allows multiple worker threads to invoke transfer/deposit/withdraw.
+ * Manages explicit transaction status transitions:
+ * - PENDING -> ACTIVE -> COMMITTED
+ * - PENDING -> ACTIVE -> ROLLED_BACK
+ * - PENDING -> ACTIVE -> FAILED
  */
 class TransactionManager {
 public:
@@ -35,11 +38,16 @@ public:
     bool deposit(int accountId, double amount);
     bool withdraw(int accountId, double amount);
 
+    // Controlled Rollback Demonstration (Atomicity Proof for VIVA)
+    bool demonstrateControlledRollback(int senderAccountId, int receiverAccountId, double amount);
+
     // Transaction Queries
     std::optional<Transaction> getTransaction(int transactionId);
+    std::vector<Transaction> getTransactions();
+    std::vector<Transaction> getTransactionsForAccount(int accountId);
+    std::vector<Transaction> getAllTransactions() { return getTransactions(); }
     std::vector<Transaction> getTransactionHistory(int accountId = 0);
     std::vector<TransactionLog> getTransactionLogs(int transactionId = 0);
-    std::vector<Transaction> getAllTransactions();
 
     // Account Queries
     std::optional<Account> getAccount(int accountId);

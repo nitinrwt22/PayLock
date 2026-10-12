@@ -50,7 +50,7 @@ CREATE TABLE transactions (
     sender_account INT NULL,
     receiver_account INT NULL,
     amount DECIMAL(15, 2) NOT NULL,
-    status ENUM('PENDING', 'PROCESSING', 'COMMITTED', 'ROLLED_BACK', 'FAILED') NOT NULL DEFAULT 'PENDING',
+    status ENUM('PENDING', 'ACTIVE', 'PROCESSING', 'COMMITTED', 'ROLLED_BACK', 'FAILED') NOT NULL DEFAULT 'PENDING',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_tx_sender FOREIGN KEY (sender_account) REFERENCES accounts(account_id),
     CONSTRAINT fk_tx_receiver FOREIGN KEY (receiver_account) REFERENCES accounts(account_id),

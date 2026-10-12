@@ -36,12 +36,14 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
     // 1. Validate Amount
     if (amount <= 0.0) {
         setLastError("Transfer amount must be strictly greater than 0.");
+        Logger::warn("Validation failed: transfer amount must be strictly greater than 0 (₹" + formatAmount(amount) + ")", "TransactionManager");
         return false;
     }
 
     // 2. Validate Accounts are not identical
     if (senderAccountId == receiverAccountId) {
         setLastError("Sender and receiver accounts cannot be the same (" + std::to_string(senderAccountId) + ").");
+        Logger::warn("Validation failed: identical sender and receiver account (" + std::to_string(senderAccountId) + ")", "TransactionManager");
         return false;
     }
 
@@ -49,8 +51,8 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
     auto senderAcc = db_.getAccountById(senderAccountId);
     if (!senderAcc.has_value()) {
         setLastError("Sender account " + std::to_string(senderAccountId) + " does not exist.");
+        Logger::warn("Validation failed: Sender account " + std::to_string(senderAccountId) + " does not exist", "TransactionManager");
         try {
-            // Use 0 (NULL in DB) for invalid account so foreign key constraint is satisfied
             int txId = db_.recordTransaction(0, receiverAccountId, amount, "ROLLED_BACK");
             if (txId > 0) {
                 db_.recordTransactionLog(txId, "TRANSFER_STARTED", 
@@ -61,13 +63,14 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
         } catch (...) {}
         return false;
     }
+    Logger::info("Sender A" + std::to_string(senderAccountId) + " validated", "TransactionManager");
 
     // 4. Validate Receiver Account Exists
     auto receiverAcc = db_.getAccountById(receiverAccountId);
     if (!receiverAcc.has_value()) {
         setLastError("Receiver account " + std::to_string(receiverAccountId) + " does not exist.");
+        Logger::warn("Validation failed: Receiver account " + std::to_string(receiverAccountId) + " does not exist", "TransactionManager");
         try {
-            // Use 0 (NULL in DB) for invalid account so foreign key constraint is satisfied
             int txId = db_.recordTransaction(senderAccountId, 0, amount, "ROLLED_BACK");
             if (txId > 0) {
                 db_.recordTransactionLog(txId, "TRANSFER_STARTED", 
@@ -78,14 +81,17 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
         } catch (...) {}
         return false;
     }
+    Logger::info("Receiver A" + std::to_string(receiverAccountId) + " validated", "TransactionManager");
 
-    // 5. Validate Sender Balance (Pre-check & DBMS Atomicity Demonstration)
+    // 5. Validate Sender Balance (Pre-check & DBMS Atomicity Enforcement)
     if (toCents(senderAcc->balance) < toCents(amount)) {
         setLastError("Insufficient funds in Account " + std::to_string(senderAccountId) +
                      " (Available: ₹" + formatAmount(senderAcc->balance) +
                      ", Requested: ₹" + formatAmount(amount) + ")");
+        Logger::warn("Insufficient balance in A" + std::to_string(senderAccountId) + 
+                     " (Available: ₹" + formatAmount(senderAcc->balance) + 
+                     ", Requested: ₹" + formatAmount(amount) + ")", "TransactionManager");
 
-        // Explicitly demonstrate START TRANSACTION -> Abort -> ROLLBACK lifecycle
         try {
             db_.beginTransaction();
             db_.rollback();
@@ -102,6 +108,7 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
             db_.recordTransactionLog(txId, "TRANSACTION_ROLLED_BACK", 
                 "Transaction rolled back due to insufficient sender balance. Balances unchanged.");
         }
+        Logger::warn("Transaction rolled back for A" + std::to_string(senderAccountId) + " due to insufficient funds", "TransactionManager");
         return false;
     }
 
@@ -109,11 +116,12 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
     try {
         db_.beginTransaction();
 
-        // Step 6a: Insert transaction record in PROCESSING status
-        int txId = db_.recordTransaction(senderAccountId, receiverAccountId, amount, "PROCESSING");
+        // Step 6a: Insert transaction record in ACTIVE status
+        int txId = db_.recordTransaction(senderAccountId, receiverAccountId, amount, "ACTIVE");
         if (txId <= 0) {
             throw DatabaseException("Failed to initialize transaction record.");
         }
+        Logger::info("Transaction T" + std::to_string(txId) + " started [State: ACTIVE]", "TransactionManager");
 
         // Step 6b: Log TRANSFER_STARTED
         db_.recordTransactionLog(txId, "TRANSFER_STARTED",
@@ -125,6 +133,7 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
         if (!db_.debitAccount(senderAccountId, amount)) {
             throw DatabaseException("Failed to debit sender account " + std::to_string(senderAccountId));
         }
+        Logger::info("₹" + formatAmount(amount) + " deducted from A" + std::to_string(senderAccountId), "TransactionManager");
         db_.recordTransactionLog(txId, "SENDER_BALANCE_DEBITED",
             "Debited ₹" + formatAmount(amount) + " from Account " + std::to_string(senderAccountId));
 
@@ -132,6 +141,7 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
         if (!db_.creditAccount(receiverAccountId, amount)) {
             throw DatabaseException("Failed to credit receiver account " + std::to_string(receiverAccountId));
         }
+        Logger::info("₹" + formatAmount(amount) + " added to A" + std::to_string(receiverAccountId), "TransactionManager");
         db_.recordTransactionLog(txId, "RECEIVER_BALANCE_CREDITED",
             "Credited ₹" + formatAmount(amount) + " to Account " + std::to_string(receiverAccountId));
 
@@ -139,6 +149,7 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
         db_.updateTransactionStatus(txId, "COMMITTED");
         db_.recordTransactionLog(txId, "TRANSACTION_COMMITTED",
             "Transfer completed and permanently committed to MySQL.");
+        Logger::info("Transaction T" + std::to_string(txId) + " committed [State: COMMITTED]", "TransactionManager");
 
         // Step 6f: Commit MySQL transaction (Durability)
         db_.commit();
@@ -148,6 +159,7 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
         // Guarantee Atomicity by rolling back all intermediate changes
         try {
             db_.rollback();
+            Logger::warn("Transaction rolled back due to error: " + std::string(ex.what()), "TransactionManager");
         } catch (...) {}
 
         setLastError(std::string("Transaction error encountered: ") + ex.what());
@@ -173,22 +185,27 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
 bool TransactionManager::deposit(int accountId, double amount) {
     if (amount <= 0.0) {
         setLastError("Deposit amount must be strictly positive.");
+        Logger::warn("Validation failed: deposit amount must be positive (₹" + formatAmount(amount) + ")", "TransactionManager");
         return false;
     }
 
     if (!db_.accountExists(accountId)) {
         setLastError("Account " + std::to_string(accountId) + " does not exist.");
+        Logger::warn("Validation failed: Account " + std::to_string(accountId) + " does not exist for deposit", "TransactionManager");
         return false;
     }
+
+    Logger::info("Account A" + std::to_string(accountId) + " validated for deposit", "TransactionManager");
 
     try {
         db_.beginTransaction();
 
         // 0 indicates external source (cash/ATM/system)
-        int txId = db_.recordTransaction(0, accountId, amount, "PROCESSING");
+        int txId = db_.recordTransaction(0, accountId, amount, "ACTIVE");
         if (txId <= 0) {
             throw DatabaseException("Failed to record deposit transaction.");
         }
+        Logger::info("Deposit transaction T" + std::to_string(txId) + " started [State: ACTIVE]", "TransactionManager");
 
         db_.recordTransactionLog(txId, "DEPOSIT_STARTED",
             "Deposit of ₹" + formatAmount(amount) + " into Account " + std::to_string(accountId));
@@ -196,12 +213,14 @@ bool TransactionManager::deposit(int accountId, double amount) {
         if (!db_.creditAccount(accountId, amount)) {
             throw DatabaseException("Failed to credit deposit to account " + std::to_string(accountId));
         }
+        Logger::info("₹" + formatAmount(amount) + " deposited into A" + std::to_string(accountId), "TransactionManager");
         db_.recordTransactionLog(txId, "RECEIVER_BALANCE_CREDITED",
             "Credited ₹" + formatAmount(amount) + " to Account " + std::to_string(accountId));
 
         db_.updateTransactionStatus(txId, "COMMITTED");
         db_.recordTransactionLog(txId, "TRANSACTION_COMMITTED",
             "Deposit committed successfully.");
+        Logger::info("Deposit transaction T" + std::to_string(txId) + " committed [State: COMMITTED]", "TransactionManager");
 
         db_.commit();
         return true;
@@ -209,6 +228,7 @@ bool TransactionManager::deposit(int accountId, double amount) {
     } catch (const std::exception& ex) {
         try {
             db_.rollback();
+            Logger::warn("Deposit rolled back due to error: " + std::string(ex.what()), "TransactionManager");
         } catch (...) {}
 
         setLastError(std::string("Deposit failed: ") + ex.what());
@@ -228,12 +248,14 @@ bool TransactionManager::deposit(int accountId, double amount) {
 bool TransactionManager::withdraw(int accountId, double amount) {
     if (amount <= 0.0) {
         setLastError("Withdrawal amount must be strictly positive.");
+        Logger::warn("Validation failed: withdrawal amount must be positive (₹" + formatAmount(amount) + ")", "TransactionManager");
         return false;
     }
 
     auto acc = db_.getAccountById(accountId);
     if (!acc.has_value()) {
         setLastError("Account " + std::to_string(accountId) + " does not exist.");
+        Logger::warn("Validation failed: Account " + std::to_string(accountId) + " does not exist for withdrawal", "TransactionManager");
         return false;
     }
 
@@ -242,6 +264,9 @@ bool TransactionManager::withdraw(int accountId, double amount) {
         setLastError("Insufficient funds in Account " + std::to_string(accountId) +
                      " (Available: ₹" + formatAmount(acc->balance) +
                      ", Requested: ₹" + formatAmount(amount) + ")");
+        Logger::warn("Withdrawal failed: insufficient balance in A" + std::to_string(accountId) + 
+                     " (Available: ₹" + formatAmount(acc->balance) + 
+                     ", Requested: ₹" + formatAmount(amount) + ")", "TransactionManager");
 
         try {
             db_.beginTransaction();
@@ -249,24 +274,27 @@ bool TransactionManager::withdraw(int accountId, double amount) {
         } catch (...) {}
 
         // 0 indicates external sink (cash withdrawal)
-        int txId = db_.recordTransaction(accountId, 0, amount, "ROLLED_BACK");
+        int txId = db_.recordTransaction(accountId, 0, amount, "FAILED");
         if (txId > 0) {
             db_.recordTransactionLog(txId, "WITHDRAWAL_STARTED",
                 "Withdrawal request of ₹" + formatAmount(amount) + " from Account " + std::to_string(accountId));
             db_.recordTransactionLog(txId, "WITHDRAWAL_FAILED", lastError_);
-            db_.recordTransactionLog(txId, "TRANSACTION_ROLLED_BACK",
-                "Transaction rolled back due to insufficient balance. Balance unchanged.");
+            db_.recordTransactionLog(txId, "TRANSACTION_FAILED",
+                "Withdrawal failed due to insufficient balance. Balance unchanged.");
         }
         return false;
     }
 
+    Logger::info("Account A" + std::to_string(accountId) + " validated for withdrawal", "TransactionManager");
+
     try {
         db_.beginTransaction();
 
-        int txId = db_.recordTransaction(accountId, 0, amount, "PROCESSING");
+        int txId = db_.recordTransaction(accountId, 0, amount, "ACTIVE");
         if (txId <= 0) {
             throw DatabaseException("Failed to record withdrawal transaction.");
         }
+        Logger::info("Withdrawal transaction T" + std::to_string(txId) + " started [State: ACTIVE]", "TransactionManager");
 
         db_.recordTransactionLog(txId, "WITHDRAWAL_STARTED",
             "Withdrawal of ₹" + formatAmount(amount) + " from Account " + std::to_string(accountId));
@@ -274,12 +302,14 @@ bool TransactionManager::withdraw(int accountId, double amount) {
         if (!db_.debitAccount(accountId, amount)) {
             throw DatabaseException("Failed to debit withdrawal from account " + std::to_string(accountId));
         }
+        Logger::info("₹" + formatAmount(amount) + " deducted from A" + std::to_string(accountId), "TransactionManager");
         db_.recordTransactionLog(txId, "SENDER_BALANCE_DEBITED",
             "Debited ₹" + formatAmount(amount) + " from Account " + std::to_string(accountId));
 
         db_.updateTransactionStatus(txId, "COMMITTED");
         db_.recordTransactionLog(txId, "TRANSACTION_COMMITTED",
             "Withdrawal committed successfully.");
+        Logger::info("Withdrawal transaction T" + std::to_string(txId) + " committed [State: COMMITTED]", "TransactionManager");
 
         db_.commit();
         return true;
@@ -287,6 +317,7 @@ bool TransactionManager::withdraw(int accountId, double amount) {
     } catch (const std::exception& ex) {
         try {
             db_.rollback();
+            Logger::warn("Withdrawal rolled back due to error: " + std::string(ex.what()), "TransactionManager");
         } catch (...) {}
 
         setLastError(std::string("Withdrawal failed: ") + ex.what());
@@ -304,6 +335,77 @@ bool TransactionManager::withdraw(int accountId, double amount) {
 }
 
 // ----------------------------------------------------------------------------
+// Controlled Rollback Demonstration (Atomicity Proof for VIVA)
+// ----------------------------------------------------------------------------
+
+bool TransactionManager::demonstrateControlledRollback(int senderAccountId, int receiverAccountId, double amount) {
+    Logger::info("=== STARTING CONTROLLED ROLLBACK ATOMICITY DEMONSTRATION ===", "TransactionManager");
+
+    auto preSender = db_.getAccountById(senderAccountId);
+    auto preReceiver = db_.getAccountById(receiverAccountId);
+
+    if (!preSender || !preReceiver) {
+        setLastError("Invalid accounts for rollback demo.");
+        Logger::error("Invalid accounts provided for rollback demonstration.", "TransactionManager");
+        return false;
+    }
+
+    double initSenderBalance = preSender->balance;
+    double initReceiverBalance = preReceiver->balance;
+
+    Logger::info("Initial State: Account " + std::to_string(senderAccountId) + " = ₹" + formatAmount(initSenderBalance) +
+                 " | Account " + std::to_string(receiverAccountId) + " = ₹" + formatAmount(initReceiverBalance), "TransactionManager");
+    Logger::info("Attempting transfer of ₹" + formatAmount(amount) + " with an intentional mid-transaction failure...", "TransactionManager");
+
+    try {
+        // Step 1: START TRANSACTION
+        db_.beginTransaction();
+        Logger::info("[STEP 1] MySQL START TRANSACTION executed.", "TransactionManager");
+
+        int txId = db_.recordTransaction(senderAccountId, receiverAccountId, amount, "ACTIVE");
+        Logger::info("[STEP 2] Transaction record created in ACTIVE state (Tx #" + std::to_string(txId) + ").", "TransactionManager");
+
+        // Step 3: Debit sender
+        db_.debitAccount(senderAccountId, amount);
+        Logger::info("[STEP 3] Debited ₹" + formatAmount(amount) + " from Account " + std::to_string(senderAccountId) + 
+                     " (Temporary in-flight balance: ₹" + formatAmount(initSenderBalance - amount) + ").", "TransactionManager");
+
+        // Step 4: Deliberately simulate catastrophic failure before credit/commit
+        Logger::warn("[STEP 4] SIMULATING UNEXPECTED HOST CRASH / NETWORK FAILURE BEFORE RECEIVER CREDIT!", "TransactionManager");
+        throw std::runtime_error("Simulated catastrophic crash before transaction commit.");
+
+    } catch (const std::exception& ex) {
+        Logger::warn("[STEP 5] Exception caught: " + std::string(ex.what()), "TransactionManager");
+        
+        // Step 6: Issue ROLLBACK
+        db_.rollback();
+        Logger::info("[STEP 6] MySQL ROLLBACK executed. Discarding uncommitted buffer changes.", "TransactionManager");
+    }
+
+    // Step 7: Verify final balances in MySQL
+    auto postSender = db_.getAccountById(senderAccountId);
+    auto postReceiver = db_.getAccountById(receiverAccountId);
+
+    if (!postSender || !postReceiver) {
+        return false;
+    }
+
+    bool senderUntouched = (toCents(postSender->balance) == toCents(initSenderBalance));
+    bool receiverUntouched = (toCents(postReceiver->balance) == toCents(initReceiverBalance));
+
+    Logger::info("Post-Rollback State: Account " + std::to_string(senderAccountId) + " = ₹" + formatAmount(postSender->balance) +
+                 " | Account " + std::to_string(receiverAccountId) + " = ₹" + formatAmount(postReceiver->balance), "TransactionManager");
+
+    if (senderUntouched && receiverUntouched) {
+        Logger::info(">>> ATOMICITY VERIFIED: Balances remain 100% untouched despite mid-flight failure!", "TransactionManager");
+        return true;
+    } else {
+        Logger::error(">>> ATOMICITY VIOLATION: Balances were corrupted!", "TransactionManager");
+        return false;
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Transaction & Account Query Operations
 // ----------------------------------------------------------------------------
 
@@ -311,25 +413,23 @@ std::optional<Transaction> TransactionManager::getTransaction(int transactionId)
     return db_.getTransactionById(transactionId);
 }
 
-std::vector<Transaction> TransactionManager::getTransactionHistory(int accountId) {
-    auto allTx = db_.listTransactions();
-    if (accountId <= 0) return allTx;
+std::vector<Transaction> TransactionManager::getTransactions() {
+    return db_.listTransactions();
+}
 
-    std::vector<Transaction> filtered;
-    for (const auto& tx : allTx) {
-        if (tx.senderAccount == accountId || tx.receiverAccount == accountId) {
-            filtered.push_back(tx);
-        }
+std::vector<Transaction> TransactionManager::getTransactionsForAccount(int accountId) {
+    if (accountId <= 0) {
+        return db_.listTransactions();
     }
-    return filtered;
+    return db_.getTransactionsForAccount(accountId);
+}
+
+std::vector<Transaction> TransactionManager::getTransactionHistory(int accountId) {
+    return getTransactionsForAccount(accountId);
 }
 
 std::vector<TransactionLog> TransactionManager::getTransactionLogs(int transactionId) {
     return db_.listTransactionLogs(transactionId);
-}
-
-std::vector<Transaction> TransactionManager::getAllTransactions() {
-    return db_.listTransactions();
 }
 
 std::optional<Account> TransactionManager::getAccount(int accountId) {
@@ -398,7 +498,6 @@ void TransactionManager::displayTransactionAudit(int transactionId) const {
         return;
     }
 
-    auto tx = db_.getTransactionById(transactionId);
     std::cout << "Transaction #" << transactionId << "\n";
     std::cout << "-------------------------------\n";
     for (const auto& log : logs) {
