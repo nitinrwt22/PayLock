@@ -28,6 +28,58 @@ void resetDatabaseState(paylock::DatabaseManager& db) {
     }
 }
 
+void runControlledConcurrencyDemo(paylock::DatabaseManager& adminDb, const paylock::DatabaseConfig& config) {
+    std::cout << "\n----------------------------------------\n";
+    std::cout << "        PAYLOCK CONCURRENCY DEMO        \n";
+    std::cout << "----------------------------------------\n\n";
+
+    // Setup initial state:
+    // A101 = ₹20,000, A102 = ₹5,000, A103 = ₹5,000
+    adminDb.executeQuery("UPDATE accounts SET balance = 20000.00 WHERE account_id = 101;");
+    adminDb.executeQuery("UPDATE accounts SET balance = 5000.00 WHERE account_id = 102;");
+    adminDb.executeQuery("UPDATE accounts SET balance = 5000.00 WHERE account_id = 103;");
+
+    std::cout << "Initial Balance:\n";
+    std::cout << "  A101 = ₹20,000\n";
+    std::cout << "  A102 = ₹5,000\n";
+    std::cout << "  A103 = ₹5,000\n\n";
+
+    std::cout << "Concurrent Transactions:\n";
+    std::cout << "  T001: A101 -> A102 ₹2,000\n";
+    std::cout << "  T002: A101 -> A103 ₹3,000\n";
+    std::cout << "  T003: A101 -> A102 ₹1,000\n\n";
+
+    paylock::ConcurrencyManager cm(config);
+    cm.start(3);
+
+    std::cout << "Workers:\n";
+    std::cout << "  W001 -> T001 -> RUNNING\n";
+    std::cout << "  W002 -> T002 -> RUNNING\n";
+    std::cout << "  W003 -> T003 -> RUNNING\n\n";
+
+    cm.submitTransfer("T001", 101, 102, 2000.00);
+    cm.submitTransfer("T002", 101, 103, 3000.00);
+    cm.submitTransfer("T003", 101, 102, 1000.00);
+
+    cm.waitForCompletion();
+    cm.shutdown();
+
+    std::cout << "After execution:\n";
+    std::cout << "  T001 -> COMMITTED\n";
+    std::cout << "  T002 -> COMMITTED\n";
+    std::cout << "  T003 -> COMMITTED\n\n";
+
+    auto b101 = adminDb.getAccountBalance(101).value_or(0.0);
+    auto b102 = adminDb.getAccountBalance(102).value_or(0.0);
+    auto b103 = adminDb.getAccountBalance(103).value_or(0.0);
+
+    std::cout << "Final:\n";
+    std::cout << "  A101 = ₹" << std::fixed << std::setprecision(0) << b101 << "\n";
+    std::cout << "  A102 = ₹" << std::fixed << std::setprecision(0) << b102 << "\n";
+    std::cout << "  A103 = ₹" << std::fixed << std::setprecision(0) << b103 << "\n";
+    std::cout << "----------------------------------------\n\n";
+}
+
 void runAutomatedWalkthrough(paylock::DatabaseManager& adminDb, const paylock::DatabaseConfig& config) {
     std::cout << "\n==================================================\n";
     std::cout << "      PAYLOCK COMPLETE AUTOMATED SHOWCASE         \n";
@@ -61,28 +113,19 @@ void runAutomatedWalkthrough(paylock::DatabaseManager& adminDb, const paylock::D
     std::cout << "\n[Step 7] Current Account Balances:\n";
     txManager.displayAccounts();
 
-    std::cout << "\n[Step 8] Transaction Audit Trail in Database:\n";
-    txManager.displayTransactionHistory();
+    std::cout << "\n[Step 8] Shared Counter Race Condition & Critical Section Demo (OS Theory):\n";
+    auto counterRes = paylock::ConcurrencyManager::demonstrateCounterRaceCondition(10, 10000);
+    std::cout << "Result: Unsafe = " << counterRes.unsafeFinalCount 
+              << " (Race occurred: " << (counterRes.raceConditionOccurred ? "YES" : "NO") 
+              << ") | Safe Mutex = " << counterRes.safeFinalCount << " (Exact match)\n";
 
-    // Concurrency Walkthrough
-    std::cout << "\n==================================================\n";
-    std::cout << "      CONCURRENCY & MULTITHREADING BENCHMARK       \n";
-    std::cout << "==================================================\n";
-    paylock::ConcurrentTransactionProcessor processor(config);
-    std::vector<paylock::TransferRequest> requests = {
-        {"T1", 101, 102, 1000.00},
-        {"T2", 101, 103, 1000.00},
-        {"T3", 102, 103,  500.00},
-        {"T4", 103, 101,  200.00}
-    };
-    auto metrics = processor.processConcurrentTransfers(requests);
-    std::cout << "Concurrency benchmark completed: " << metrics.successfulTransactions 
-              << " successful transfers in " << metrics.executionTimeMs << " ms.\n";
+    std::cout << "\n[Step 9] Controlled Concurrency Demo (Multi-Worker Execution):\n";
+    runControlledConcurrencyDemo(adminDb, config);
 
     std::cout << "\n==================================================\n";
     std::cout << "           OS + DBMS INTEGRATION SUMMARY          \n";
     std::cout << "==================================================\n";
-    std::cout << "[OS Concepts]   : std::thread, std::mutex critical sections, thread state tracking.\n";
+    std::cout << "[OS Concepts]   : std::thread, std::mutex critical sections, worker state tracking.\n";
     std::cout << "[DBMS Concepts] : START TRANSACTION, COMMIT, ROLLBACK, ACID atomicity, WAL logs.\n";
     std::cout << "==================================================\n\n";
 }
@@ -91,21 +134,23 @@ void runInteractiveCLI(paylock::DatabaseManager& adminDb, const paylock::Databas
     paylock::TransactionManager txManager(adminDb);
 
     while (true) {
-        std::cout << "\n==============================\n";
-        std::cout << "           PAYLOCK            \n";
-        std::cout << "   Transaction Engine Demo    \n";
-        std::cout << "==============================\n";
-        std::cout << "1. Transfer Funds\n";
-        std::cout << "2. Deposit Funds\n";
-        std::cout << "3. Withdraw Funds\n";
-        std::cout << "4. View Account Balances\n";
-        std::cout << "5. View Transaction History\n";
-        std::cout << "6. Controlled Rollback Demo\n";
-        std::cout << "7. Run Automated Walkthrough\n";
-        std::cout << "8. Reset Database to Seed State\n";
-        std::cout << "9. Exit\n";
-        std::cout << "------------------------------\n";
-        std::cout << "Enter choice [1-9]: ";
+        std::cout << "\n========================================\n";
+        std::cout << "                PAYLOCK                 \n";
+        std::cout << "    Concurrent Transaction Engine       \n";
+        std::cout << "========================================\n";
+        std::cout << " 1. Transfer Funds (Single Transaction)\n";
+        std::cout << " 2. Deposit Funds\n";
+        std::cout << " 3. Withdraw Funds\n";
+        std::cout << " 4. View Account Balances\n";
+        std::cout << " 5. View Transaction History\n";
+        std::cout << " 6. Controlled Rollback Demo (Atomicity)\n";
+        std::cout << " 7. Controlled Concurrency Demo (Step 17)\n";
+        std::cout << " 8. Shared Counter Race Condition Demo\n";
+        std::cout << " 9. Run Full Automated Walkthrough\n";
+        std::cout << "10. Reset Database to Seed State\n";
+        std::cout << "11. Exit\n";
+        std::cout << "----------------------------------------\n";
+        std::cout << "Enter choice [1-11]: ";
 
         int choice = 0;
         if (!(std::cin >> choice)) {
@@ -164,21 +209,34 @@ void runInteractiveCLI(paylock::DatabaseManager& adminDb, const paylock::Databas
                 break;
             }
             case 7: {
-                runAutomatedWalkthrough(adminDb, config);
+                runControlledConcurrencyDemo(adminDb, config);
                 break;
             }
             case 8: {
+                std::cout << "Running Shared Counter Race Condition Demo (10 threads, 10,000 increments each)...\n";
+                auto res = paylock::ConcurrencyManager::demonstrateCounterRaceCondition(10, 10000);
+                std::cout << "\nResults:\n";
+                std::cout << "Expected Count: " << res.expectedCount << "\n";
+                std::cout << "Unsafe Count  : " << res.unsafeFinalCount << " (Lost " << (res.expectedCount - res.unsafeFinalCount) << " updates)\n";
+                std::cout << "Safe Count    : " << res.safeFinalCount << " (Exact match guaranteed by std::mutex)\n";
+                break;
+            }
+            case 9: {
+                runAutomatedWalkthrough(adminDb, config);
+                break;
+            }
+            case 10: {
                 resetDatabaseState(adminDb);
                 std::cout << "[System]: Database accounts and transactions reset to clean seed state.\n";
                 txManager.displayAccounts();
                 break;
             }
-            case 9: {
+            case 11: {
                 std::cout << "Exiting PayLock. Goodbye!\n";
                 return;
             }
             default: {
-                std::cout << "Invalid choice. Please enter a number between 1 and 9.\n";
+                std::cout << "Invalid choice. Please enter a number between 1 and 11.\n";
                 break;
             }
         }

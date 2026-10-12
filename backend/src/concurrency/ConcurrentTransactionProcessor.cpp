@@ -11,6 +11,7 @@ std::mutex ConcurrentTransactionProcessor::consoleMutex_;
 std::string threadStateToString(ThreadState state) {
     switch (state) {
         case ThreadState::CREATED:           return "CREATED";
+        case ThreadState::WAITING:           return "WAITING";
         case ThreadState::WAITING_FOR_MUTEX: return "WAITING FOR MUTEX";
         case ThreadState::RUNNING:           return "RUNNING";
         case ThreadState::COMPLETED:         return "COMPLETED";

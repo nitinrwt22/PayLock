@@ -19,6 +19,7 @@ namespace paylock {
  */
 enum class ThreadState {
     CREATED,
+    WAITING,
     WAITING_FOR_MUTEX,
     RUNNING,
     COMPLETED,

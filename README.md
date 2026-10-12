@@ -115,7 +115,7 @@ PayLock/
 │   └── procedures.sql      # Stored procedures (sp_transfer_funds)
 │
 ├── tests/
-│   └── test_db.cpp         # Comprehensive 22-test automated test suite
+│   └── test_db.cpp         # Comprehensive 25-test automated test suite
 │
 ├── frontend/
 │   ├── index.html          # Interactive dark-mode dashboard
@@ -212,6 +212,33 @@ The engine includes a dedicated proof method (`demonstrateControlledRollback(sen
 4. Intentionally triggers a simulated catastrophic failure before crediting Account 102.
 5. Catches exception and executes MySQL `ROLLBACK;`.
 6. Re-queries MySQL balances, proving that Account 101 was restored to its exact original balance and Account 102 was never touched.
+
+---
+
+## Concurrency Engine
+
+PayLock's **Concurrency Engine** (`ConcurrencyManager` & `ConcurrentTransactionProcessor`) orchestrates multithreaded transaction processing by integrating OS concurrency mechanisms with transactional database guarantees:
+
+### 1. Multithreading & Worker Pool
+- **`std::thread` Worker Pool**: Configurable pool of worker threads (`W001`, `W002`, `W003`, `W004`) continuously serving an asynchronous transaction job queue.
+- **Efficient Non-Busy Waiting**: Workers block efficiently on `std::condition_variable` rather than spinning in busy-wait loops.
+- **Connection Isolation**: Each worker thread maintains its **own independent MySQL connection handle**, preventing socket interleaving and cross-thread connection contention.
+
+### 2. Synchronization & Critical Sections
+- **Mutual Exclusion (`std::mutex`)**: Critical sections protecting in-memory balance verification and mutation are guarded via `std::lock_guard<std::mutex>` (RAII).
+- **Time-of-Check to Time-of-Use (TOCTOU) Prevention**: Eliminates race conditions where competing threads verify solvency simultaneously and execute double debits.
+
+### 3. Thread State Lifecycle Tracking
+Every worker thread's state is tracked in a thread-safe registry:
+- `CREATED` -> `WAITING` (waiting for job) -> `RUNNING` (executing transaction) -> `COMPLETED` / `FAILED`.
+
+### 4. Controlled Demonstrations for Viva / Evaluation
+- **Shared Counter Race Condition (`demonstrateCounterRaceCondition`)**:
+  - Unsynchronized: $N$ threads increment counter without locks $\rightarrow$ heavy lost updates.
+  - Synchronized: $N$ threads increment counter with `std::mutex` $\rightarrow$ exact deterministic count ($N \times M$).
+- **Multi-Worker Payment Benchmark**:
+  - Dispatches simultaneous transactions (e.g. Account A ₹20,000 transferring ₹2,000 to B, ₹3,000 to C, ₹1,000 to B).
+  - Verifies that final balances in MySQL are mathematically exact (A = ₹14,000, B = ₹8,000, C = ₹8,000).
 
 ---
 
