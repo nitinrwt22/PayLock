@@ -157,7 +157,7 @@ PayLock/
 | **Concurrent Processor** | `std::thread` concurrent workers, race-condition prevention, mutex guards | **[BUILT]** |
 | **Logger** | Centralized thread-safe console & structured event logging | **[BUILT]** |
 | **ConcurrencyManager** | Facade for thread execution, worker scheduling & contention control | **[BUILT]** |
-| **LockManager** | Shared (S) and Exclusive (X) 2-Phase Locking interface and stub | **[IN PROGRESS / STUBBED]** |
+| **LockManager** | Shared (S) and Exclusive (X) 2-Phase Locking, FIFO wait queues, lock upgrades | **[BUILT]** |
 | **DeadlockDetector** | Wait-For Graph (WFG) cycle detection interface and DFS stub | **[IN PROGRESS / STUBBED]** |
 | **RecoveryManager** | Deadlock victim selection policies and transaction rollback stub | **[IN PROGRESS / STUBBED]** |
 | **ResourceManager** | Virtual address to page translation and resource allocation stub | **[IN PROGRESS / STUBBED]** |
@@ -242,6 +242,36 @@ Every worker thread's state is tracked in a thread-safe registry:
 
 ---
 
+## Lock Manager
+
+PayLock's **Lock Manager** (`paylock::LockManager`) provides granular application-level concurrency control over individual payment accounts, replacing coarse-grained locks with strict 2-Phase Locking (2PL):
+
+### 1. Lock Modes & Compatibility
+- **Shared (S) Lock**: Acquired for read operations (`checkBalance()`). Multiple transactions can hold Shared locks concurrently on the same account.
+- **Exclusive (X) Lock**: Acquired for write operations (`transfer()`, `deposit()`, `withdraw()`). Conflicting with all other Shared and Exclusive requests.
+
+| Requested Mode | Granted: None | Granted: Shared (S) | Granted: Exclusive (X) |
+|---|---|---|---|
+| **Shared (S)** | Compatible | Compatible | Incompatible |
+| **Exclusive (X)** | Compatible | Incompatible | Incompatible |
+
+### 2. Waiting Queue & Thread Wakeup
+- Conflicting transactions wait in a non-busy **FIFO wait queue** backed by `std::condition_variable`.
+- Releasing a lock automatically notifies queued transactions via `lockCv_.notify_all()`, re-evaluating compatibility in FIFO order without starvation.
+
+### 3. Lock Upgrades (S → X)
+- Supports safe lock upgrading: If a transaction holding a Shared lock requests an Exclusive lock, the upgrade succeeds immediately if it is the sole holder. If other shared holders exist, it waits safely on `lockCv_` until other shared holders release.
+
+### 4. Deterministic Multi-Resource Lock Ordering
+- Transfers involving multiple accounts acquire locks in a deterministic order: `min(account1, account2)` followed by `max(account1, account2)`.
+- Eliminates circular AB-BA wait conditions during concurrent two-party transfers.
+
+### 5. Transaction Lifecycle Integration
+- Integrated directly with `TransactionManager` via RAII scoped cleanups (`LockGuardCleanup`).
+- All held locks are automatically released (`releaseAllLocks()`) on transaction `COMMIT`, `ROLLBACK`, or failure.
+
+---
+
 ## Database Setup
 
 ### 1. Execute SQL Scripts
@@ -305,7 +335,7 @@ The demonstration runs:
 # Or via make:
 make test
 ```
-Executes all 19 unit, integration, concurrency, and architecture tests.
+Executes all 35 unit, integration, ACID, concurrency, architecture, and Lock Manager tests.
 
 ### 3. Open the Frontend Dashboard
 ```bash
@@ -319,10 +349,10 @@ python3 -m http.server 8080 --directory frontend
 ---
 
 ## Future Modules
-In upcoming phases, the established interfaces will be populated with full implementations:
-- **Lock Manager**: Granular row-level 2-Phase Locking (2PL), shared read locks, exclusive write locks, lock wait queues.
-- **Deadlock Detection**: Periodic Wait-For Graph (WFG) cycle detection using Tarjan's or Kosaraju's DFS cycle discovery.
-- **Deadlock Recovery**: Automated victim selection (Youngest Transaction, Lowest Cost, Fewest Locks), transaction abort, lock release, and automatic client retry.
+In upcoming phases, the remaining advanced modules will be populated with full implementations:
+- **Lock Manager**: **[COMPLETED IN STEP 4]** Granular row-level 2-Phase Locking (2PL), shared read locks, exclusive write locks, FIFO wait queues, lock upgrades.
+- **Deadlock Detection (Step 5)**: Periodic Wait-For Graph (WFG) cycle detection using DFS cycle discovery.
+- **Deadlock Recovery (Step 6)**: Automated victim selection (Youngest Transaction, Lowest Cost, Fewest Locks), transaction abort, lock release, and automatic client retry.
 - **Resource Management**: Operating systems paging simulation, memory frame allocation algorithms (FIFO, LRU), and resource request/allocation matrices.
 - **REST API Layer**: Embedded C++ HTTP server bridging the C++ backend to the web dashboard via standard JSON endpoints (`GET /api/accounts`, `POST /api/transfer`, `GET /api/deadlocks`).
 - **Frontend Integration**: Full live bi-directional dashboard synchronization with real-time WebSocket or Server-Sent Events (SSE) telemetry.

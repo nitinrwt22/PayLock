@@ -122,14 +122,52 @@ When multiple threads log concurrently to `std::cout`, character streams can bec
 
 ---
 
-## 11. Current Limitations
-- **Coarse-Grained Critical Section**: Balance modifications across all accounts currently share `criticalSectionMutex_`, preventing independent accounts (e.g. Account A $\rightarrow$ B and Account C $\rightarrow$ D) from updating concurrently.
-- **No In-Memory 2-Phase Locking**: Locks are currently acquired at transaction entry and released immediately on completion rather than using a formal growing/shrinking lock phase.
+---
+
+## 11. End-to-End Relationship: Threads -> Transactions -> Locks -> DB Resources
+
+PayLock operates a layered concurrency and transaction architecture:
+
+```text
+               Concurrent Incoming Requests
+                           │
+                           ▼
+               [ConcurrencyManager]
+                           │ Dispatches tasks
+                           ▼
+                Worker Threads (std::thread)
+                           │ Executes business logic
+                           ▼
+               [TransactionManager]
+                           │ Enforces ACID lifecycle
+                           ▼
+                 [LockManager]
+               (Logical 2PL Concurrency Control)
+               ┌───────────┴───────────┐
+               ▼                       ▼
+          Shared (S)             Exclusive (X)
+         Balance Read             Debit/Credit
+               │                       │
+               ▼                       ▼
+               [DatabaseManager]
+                           │
+                           ▼
+                 MySQL (InnoDB Engine)
+```
+
+1. **Threads (`std::thread`)**:
+   - The OS unit of execution. Worker threads pull transaction jobs from the thread pool queue and coordinate the execution sequence.
+2. **Transactions (`TransactionManager`)**:
+   - The logical business unit of work. Defines ACID boundaries (`ACTIVE`, `COMMITTED`, `ROLLED_BACK`).
+3. **Locks (`LockManager`)**:
+   - Logical application-level concurrency control mechanism protecting shared account resources (`ACCOUNT:A101`). Enforces 2-Phase Locking (2PL), Shared/Exclusive compatibility, non-busy wait queues with `std::condition_variable`, and deterministic lock ordering to prevent circular deadlocks.
+4. **Database Resources (`DatabaseManager` & MySQL)**:
+   - Physical storage entities (`users`, `accounts`, `transactions`, `transaction_logs`). Manipulated inside atomic MySQL transactions guarded by the application-level lock manager.
 
 ---
 
-## 12. How Future Lock Manager (Step 4) Will Extend This
-In **Step 4 (Lock Manager)**:
-- Coarse-grained locking will be replaced by **fine-grained account-level row locking** (`LockManager`).
-- Support for **Shared (S) locks** (read-only balance checks) and **Exclusive (X) locks** (debit/credit balance mutations) adhering to **Strict 2-Phase Locking (Strict 2PL)**.
-- Multiple transactions touching non-overlapping accounts will execute in true parallel fashion without mutual contention.
+## 12. Current Architecture & Step 4 Integration
+- Step 4 Lock Manager is **fully integrated** with `TransactionManager` and `ConcurrencyManager`.
+- Transfers acquire exclusive locks on sender and receiver accounts using deterministic lock ordering (`min(id1, id2)` then `max(id1, id2)`).
+- Balance queries acquire shared locks allowing concurrent non-interfering reads.
+- All locks are released deterministically upon commit or rollback via RAII cleanup guards.

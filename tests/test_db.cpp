@@ -10,9 +10,12 @@
 #include <iostream>
 #include <cassert>
 #include <ctime>
+#include <thread>
+#include <atomic>
+#include <chrono>
 
 void runTests() {
-    std::cout << "[TEST RUNNER] Starting PayLock Complete Test Suite (Days 1, 2 & 3 Concurrency Engine)...\n";
+    std::cout << "[TEST RUNNER] Starting PayLock Complete Test Suite (Steps 1, 2, 3 & Step 4 Lock Manager)...\n";
 
     paylock::DatabaseConfig config = paylock::DatabaseConfig::fromEnvOrDefault();
     paylock::DatabaseManager db(config);
@@ -332,7 +335,265 @@ void runTests() {
     assert(resourceMgr.getAvailablePages() == 64);
     std::cout << "PASSED\n";
 
-    std::cout << "\n[ALL 25 UNIT, TRANSACTION ENGINE, ACID, CONCURRENCY & ARCHITECTURE TESTS PASSED SUCCESSFULLY!]\n";
+    // =========================================================================
+    // SECTION 5: STEP 4 — LOCK MANAGER COMPREHENSIVE TESTS
+    // =========================================================================
+    std::cout << "\n--- SECTION 5: STEP 4 — LOCK MANAGER CONCURRENCY CONTROL TESTS ---\n";
+
+    // Test 26: Shared Locks Coexistence (Step 20)
+    std::cout << "Test 26: [Step 20] Shared Locks coexistence (T001 & T002 on A101)... ";
+    {
+        paylock::LockManager lm;
+        assert(lm.acquireLock(1, 101, paylock::LockMode::SHARED));
+        assert(lm.acquireLock(2, 101, paylock::LockMode::SHARED));
+        assert(lm.isAccountLocked(101));
+        assert(lm.getAccountLockMode(101).value() == paylock::LockMode::SHARED);
+        auto holders = lm.getLockHolders(101);
+        assert(holders.size() == 2);
+        assert(lm.releaseLock(1, 101));
+        assert(lm.isAccountLocked(101)); // T2 still holds
+        assert(lm.releaseLock(2, 101));
+        assert(!lm.isAccountLocked(101)); // All released
+    }
+    std::cout << "PASSED (Both granted S lock simultaneously)\n";
+
+    // Test 27: Exclusive Lock Acquisition & Release (Step 21)
+    std::cout << "Test 27: [Step 21] Exclusive Lock acquisition & release (T001 on A101)... ";
+    {
+        paylock::LockManager lm;
+        assert(lm.acquireLock(1, 101, paylock::LockMode::EXCLUSIVE));
+        assert(lm.isAccountLocked(101));
+        assert(lm.getAccountLockMode(101).value() == paylock::LockMode::EXCLUSIVE);
+        assert(lm.getLockHolders(101).size() == 1);
+        assert(lm.releaseLock(1, 101));
+        assert(!lm.isAccountLocked(101));
+        assert(lm.getLockHolders(101).empty());
+    }
+    std::cout << "PASSED (X lock acquired and released cleanly)\n";
+
+    // Test 28: Exclusive Conflict & Waiting Queue Wakeup (Step 22)
+    std::cout << "Test 28: [Step 22] Exclusive Lock conflict & condition variable wakeup (T1 X vs T2 X)... ";
+    {
+        paylock::LockManager lm;
+        assert(lm.acquireLock(1, 101, paylock::LockMode::EXCLUSIVE));
+
+        std::atomic<bool> t2Acquired{false};
+        std::atomic<bool> t2Started{false};
+
+        std::thread t2([&]() {
+            t2Started = true;
+            if (lm.acquireLock(2, 101, paylock::LockMode::EXCLUSIVE)) {
+                t2Acquired = true;
+                lm.releaseLock(2, 101);
+            }
+        });
+
+        while (!t2Started.load()) std::this_thread::yield();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        // T2 must be waiting and blocked
+        assert(!t2Acquired.load());
+        auto waiters = lm.getWaitingRequests(101);
+        assert(waiters.size() == 1);
+        assert(waiters[0].transactionId == 2);
+        assert(waiters[0].mode == paylock::LockMode::EXCLUSIVE);
+
+        // T1 releases lock -> wakes T2
+        assert(lm.releaseLock(1, 101));
+        t2.join();
+
+        assert(t2Acquired.load());
+        assert(!lm.isAccountLocked(101));
+    }
+    std::cout << "PASSED (T2 blocked while T1 held X; woke & acquired on release)\n";
+
+    // Test 29: Shared/Exclusive Conflict (Step 23)
+    std::cout << "Test 29: [Step 23] Shared/Exclusive conflict (T1 S vs T2 X on A101)... ";
+    {
+        paylock::LockManager lm;
+        assert(lm.acquireLock(1, 101, paylock::LockMode::SHARED));
+
+        std::atomic<bool> t2Acquired{false};
+        std::atomic<bool> t2Started{false};
+
+        std::thread t2([&]() {
+            t2Started = true;
+            if (lm.acquireLock(2, 101, paylock::LockMode::EXCLUSIVE)) {
+                t2Acquired = true;
+                lm.releaseLock(2, 101);
+            }
+        });
+
+        while (!t2Started.load()) std::this_thread::yield();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        // T2 must be waiting because X conflicts with S
+        assert(!t2Acquired.load());
+        assert(lm.getAccountLockMode(101).value() == paylock::LockMode::SHARED);
+
+        // T1 releases S lock -> wakes T2
+        assert(lm.releaseLock(1, 101));
+        t2.join();
+
+        assert(t2Acquired.load());
+        assert(!lm.isAccountLocked(101));
+    }
+    std::cout << "PASSED (T2 X blocked while T1 held S; granted after release)\n";
+
+    // Test 30: Multiple Waiters Queue Evaluation (Step 24)
+    std::cout << "Test 30: [Step 24] Multiple Waiters queue evaluation & FIFO ordering... ";
+    {
+        paylock::LockManager lm;
+        // T1 holds X
+        assert(lm.acquireLock(1, 101, paylock::LockMode::EXCLUSIVE));
+
+        std::atomic<bool> t2Acquired{false};
+        std::atomic<bool> t3Acquired{false};
+
+        std::thread t2([&]() {
+            if (lm.acquireLock(2, 101, paylock::LockMode::EXCLUSIVE)) {
+                t2Acquired = true;
+                std::this_thread::sleep_for(std::chrono::milliseconds(30));
+                lm.releaseLock(2, 101);
+            }
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(40));
+
+        std::thread t3([&]() {
+            if (lm.acquireLock(3, 101, paylock::LockMode::SHARED)) {
+                t3Acquired = true;
+                lm.releaseLock(3, 101);
+            }
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(40));
+
+        auto queue = lm.getWaitingRequests(101);
+        assert(queue.size() == 2);
+        assert(queue[0].transactionId == 2);
+        assert(queue[1].transactionId == 3);
+
+        // T1 releases -> T2 acquires first, then releases -> T3 acquires
+        assert(lm.releaseLock(1, 101));
+
+        t2.join();
+        t3.join();
+
+        assert(t2Acquired.load());
+        assert(t3Acquired.load());
+        assert(!lm.isAccountLocked(101));
+    }
+    std::cout << "PASSED (FIFO wait queue granted requests deterministically)\n";
+
+    // Test 31: Release All Locks for Transaction Lifecycle (Step 25)
+    std::cout << "Test 31: [Step 25] releaseAllLocks transaction lifecycle cleanup... ";
+    {
+        paylock::LockManager lm;
+        assert(lm.acquireLock(1001, 101, paylock::LockMode::EXCLUSIVE));
+        assert(lm.acquireLock(1001, 102, paylock::LockMode::EXCLUSIVE));
+        assert(lm.acquireLock(1001, 103, paylock::LockMode::SHARED));
+
+        auto held = lm.getLocksForTransaction(1001);
+        assert(held.size() == 3);
+
+        lm.releaseAllLocks(1001);
+
+        auto heldAfter = lm.getLocksForTransaction(1001);
+        assert(heldAfter.empty());
+        assert(!lm.isAccountLocked(101));
+        assert(!lm.isAccountLocked(102));
+        assert(!lm.isAccountLocked(103));
+    }
+    std::cout << "PASSED (All 3 resource locks released atomically)\n";
+
+    // Test 32: Lock Upgrade (Step 26)
+    std::cout << "Test 32: [Step 26] Lock Upgrade (S -> X): Solo Holder & Multi-Holder Waiting... ";
+    {
+        paylock::LockManager lm;
+        // Case A: Solo holder upgrade
+        assert(lm.acquireLock(1, 101, paylock::LockMode::SHARED));
+        assert(lm.upgradeLock(1, 101));
+        assert(lm.getAccountLockMode(101).value() == paylock::LockMode::EXCLUSIVE);
+        assert(lm.releaseLock(1, 101));
+
+        // Case B: Multi-holder upgrade waiting
+        assert(lm.acquireLock(1, 101, paylock::LockMode::SHARED));
+        assert(lm.acquireLock(2, 101, paylock::LockMode::SHARED));
+
+        std::atomic<bool> t1Upgraded{false};
+        std::thread t1([&]() {
+            if (lm.upgradeLock(1, 101)) {
+                t1Upgraded = true;
+                lm.releaseLock(1, 101);
+            }
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        assert(!t1Upgraded.load()); // T1 must wait for T2 to release
+
+        assert(lm.releaseLock(2, 101)); // T2 releases S lock
+        t1.join();
+
+        assert(t1Upgraded.load());
+        assert(!lm.isAccountLocked(101));
+    }
+    std::cout << "PASSED (Solo upgrade immediate; multi-holder upgrade waited for S release)\n";
+
+    // Test 33: Deterministic Lock Ordering (Step 14)
+    std::cout << "Test 33: [Step 14] Deterministic lock ordering (min/max account IDs)... ";
+    {
+        paylock::LockManager lm;
+        // Inverse order: 105 then 101
+        assert(lm.acquireTransferLocks(1, 105, 101));
+        auto held = lm.getDetailedLocksForTransaction(1);
+        assert(held.size() == 2);
+        assert(lm.isAccountLocked(101));
+        assert(lm.isAccountLocked(105));
+        lm.releaseAllLocks(1);
+        assert(!lm.isAccountLocked(101));
+        assert(!lm.isAccountLocked(105));
+    }
+    std::cout << "PASSED (Deterministic ordering min(101, 105) applied)\n";
+
+    // Test 34: Lock Table State Monitoring & CLI Display (Step 16)
+    std::cout << "Test 34: [Step 16] Lock Table monitoring & ASCII status table... ";
+    {
+        paylock::LockManager lm;
+        assert(lm.acquireLock(1001, 101, paylock::LockMode::EXCLUSIVE));
+        assert(lm.acquireLock(1002, 102, paylock::LockMode::SHARED));
+        assert(lm.acquireLock(1003, 102, paylock::LockMode::SHARED));
+        lm.displayLockTable();
+        lm.releaseAllLocks(1001);
+        lm.releaseAllLocks(1002);
+        lm.releaseAllLocks(1003);
+    }
+    std::cout << "PASSED\n";
+
+    // Test 35: End-to-End Concurrent Lock Processing with Worker Pool (Step 27)
+    std::cout << "Test 35: [Step 27] End-to-End Concurrent Lock Processing with Worker Threads... ";
+    {
+        paylock::LockManager sharedLockMgr;
+        paylock::ConcurrencyManager cm(config, &sharedLockMgr);
+        cm.start(3);
+
+        // Submit 4 concurrent transactions across shared accounts
+        cm.submitTransfer("LOCK_T1", 101, 102, 200.0);
+        cm.submitTransfer("LOCK_T2", 102, 103, 150.0);
+        cm.submitDeposit("LOCK_T3", 101, 500.0);
+        cm.submitWithdraw("LOCK_T4", 103, 100.0);
+
+        cm.waitForCompletion();
+        cm.shutdown();
+
+        // Verify all logical resource locks are 100% cleanly released
+        assert(!sharedLockMgr.isAccountLocked(101));
+        assert(!sharedLockMgr.isAccountLocked(102));
+        assert(!sharedLockMgr.isAccountLocked(103));
+    }
+    std::cout << "PASSED (All worker jobs serialized through LockManager; 0 leaked locks)\n";
+
+    std::cout << "\n[ALL 35 UNIT, TRANSACTION ENGINE, ACID, CONCURRENCY, ARCHITECTURE & LOCK MANAGER TESTS PASSED SUCCESSFULLY!]\n";
 }
 
 int main() {

@@ -1,4 +1,5 @@
 #include "concurrency/ConcurrencyManager.h"
+#include "locking/LockManager.h"
 #include "logging/Logger.h"
 #include <iostream>
 #include <iomanip>
@@ -6,8 +7,8 @@
 
 namespace paylock {
 
-ConcurrencyManager::ConcurrencyManager(DatabaseConfig config)
-    : dbConfig_(std::move(config)), processor_(dbConfig_) {}
+ConcurrencyManager::ConcurrencyManager(DatabaseConfig config, LockManager* lockManager)
+    : dbConfig_(std::move(config)), processor_(dbConfig_), lockManager_(lockManager) {}
 
 ConcurrencyManager::~ConcurrencyManager() {
     shutdown();
@@ -53,7 +54,7 @@ void ConcurrencyManager::workerLoop(const std::string& workerId) {
         return;
     }
 
-    TransactionManager workerTx(workerDb);
+    TransactionManager workerTx(workerDb, lockManager_);
 
     while (true) {
         TransactionJob job;

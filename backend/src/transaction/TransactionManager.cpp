@@ -1,14 +1,21 @@
 #include "transaction/TransactionManager.h"
+#include "locking/LockManager.h"
 #include "logging/Logger.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <cmath>
+#include <atomic>
 
 namespace paylock {
 
-TransactionManager::TransactionManager(DatabaseManager& dbManager)
-    : db_(dbManager) {}
+int TransactionManager::nextLogicalTxId() {
+    static std::atomic<int> counter{5000};
+    return counter++;
+}
+
+TransactionManager::TransactionManager(DatabaseManager& dbManager, LockManager* lockManager)
+    : db_(dbManager), lockManager_(lockManager) {}
 
 int64_t TransactionManager::toCents(double amount) {
     return std::llround(amount * 100.0);
@@ -33,6 +40,20 @@ std::string TransactionManager::getLastError() const {
 // ----------------------------------------------------------------------------
 
 bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, double amount) {
+    int logicalTxId = nextLogicalTxId();
+    if (lockManager_) {
+        if (!lockManager_->acquireTransferLocks(logicalTxId, senderAccountId, receiverAccountId)) {
+            setLastError("Failed to acquire locks for transfer between A" + 
+                         std::to_string(senderAccountId) + " and A" + std::to_string(receiverAccountId));
+            return false;
+        }
+    }
+    struct LockGuardCleanup {
+        LockManager* lm;
+        int id;
+        ~LockGuardCleanup() { if (lm) lm->releaseAllLocks(id); }
+    } lockCleanup{lockManager_, logicalTxId};
+
     // 1. Validate Amount
     if (amount <= 0.0) {
         setLastError("Transfer amount must be strictly greater than 0.");
@@ -183,6 +204,19 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
 }
 
 bool TransactionManager::deposit(int accountId, double amount) {
+    int logicalTxId = nextLogicalTxId();
+    if (lockManager_) {
+        if (!lockManager_->acquireLock(logicalTxId, accountId, LockMode::EXCLUSIVE)) {
+            setLastError("Failed to acquire lock for deposit on A" + std::to_string(accountId));
+            return false;
+        }
+    }
+    struct LockGuardCleanup {
+        LockManager* lm;
+        int id;
+        ~LockGuardCleanup() { if (lm) lm->releaseAllLocks(id); }
+    } lockCleanup{lockManager_, logicalTxId};
+
     if (amount <= 0.0) {
         setLastError("Deposit amount must be strictly positive.");
         Logger::warn("Validation failed: deposit amount must be positive (₹" + formatAmount(amount) + ")", "TransactionManager");
@@ -246,6 +280,18 @@ bool TransactionManager::deposit(int accountId, double amount) {
 }
 
 bool TransactionManager::withdraw(int accountId, double amount) {
+    int logicalTxId = nextLogicalTxId();
+    if (lockManager_) {
+        if (!lockManager_->acquireLock(logicalTxId, accountId, LockMode::EXCLUSIVE)) {
+            setLastError("Failed to acquire lock for withdrawal on A" + std::to_string(accountId));
+            return false;
+        }
+    }
+    struct LockGuardCleanup {
+        LockManager* lm;
+        int id;
+        ~LockGuardCleanup() { if (lm) lm->releaseAllLocks(id); }
+    } lockCleanup{lockManager_, logicalTxId};
     if (amount <= 0.0) {
         setLastError("Withdrawal amount must be strictly positive.");
         Logger::warn("Validation failed: withdrawal amount must be positive (₹" + formatAmount(amount) + ")", "TransactionManager");
@@ -340,6 +386,19 @@ bool TransactionManager::withdraw(int accountId, double amount) {
 
 bool TransactionManager::demonstrateControlledRollback(int senderAccountId, int receiverAccountId, double amount) {
     Logger::info("=== STARTING CONTROLLED ROLLBACK ATOMICITY DEMONSTRATION ===", "TransactionManager");
+
+    int logicalTxId = nextLogicalTxId();
+    if (lockManager_) {
+        if (!lockManager_->acquireTransferLocks(logicalTxId, senderAccountId, receiverAccountId)) {
+            setLastError("Failed to acquire locks for rollback demo.");
+            return false;
+        }
+    }
+    struct LockGuardCleanup {
+        LockManager* lm;
+        int id;
+        ~LockGuardCleanup() { if (lm) lm->releaseAllLocks(id); }
+    } lockCleanup{lockManager_, logicalTxId};
 
     auto preSender = db_.getAccountById(senderAccountId);
     auto preReceiver = db_.getAccountById(receiverAccountId);
@@ -437,6 +496,13 @@ std::optional<Account> TransactionManager::getAccount(int accountId) {
 }
 
 std::optional<double> TransactionManager::checkBalance(int accountId) {
+    if (lockManager_) {
+        int logicalTxId = nextLogicalTxId();
+        lockManager_->acquireLock(logicalTxId, accountId, LockMode::SHARED);
+        auto res = db_.getAccountBalance(accountId);
+        lockManager_->releaseLock(logicalTxId, accountId);
+        return res;
+    }
     return db_.getAccountBalance(accountId);
 }
 

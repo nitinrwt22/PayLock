@@ -90,14 +90,19 @@ struct CounterDemoResult {
  * - Thread-isolated MySQL connections (each worker owns an independent connection).
  * - Multi-threaded invocation of TransactionManager ACID transactions.
  */
+class LockManager;
+
 class ConcurrencyManager {
 public:
-    explicit ConcurrencyManager(DatabaseConfig config = DatabaseConfig::fromEnvOrDefault());
+    explicit ConcurrencyManager(DatabaseConfig config = DatabaseConfig::fromEnvOrDefault(), LockManager* lockManager = nullptr);
     ~ConcurrencyManager();
 
     // Non-copyable, non-movable due to thread management and mutexes
     ConcurrencyManager(const ConcurrencyManager&) = delete;
     ConcurrencyManager& operator=(const ConcurrencyManager&) = delete;
+
+    void setLockManager(LockManager* lockManager) noexcept { lockManager_ = lockManager; }
+    LockManager* getLockManager() const noexcept { return lockManager_; }
 
     // Worker Pool Lifecycle
     void start(size_t numWorkers = 4);
@@ -134,6 +139,7 @@ private:
 
     DatabaseConfig dbConfig_;
     ConcurrentTransactionProcessor processor_;
+    LockManager* lockManager_{nullptr};
 
     // Worker Threads & Synchronization
     std::vector<std::thread> workers_;

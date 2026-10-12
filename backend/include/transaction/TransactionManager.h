@@ -26,9 +26,14 @@ namespace paylock {
  * - PENDING -> ACTIVE -> ROLLED_BACK
  * - PENDING -> ACTIVE -> FAILED
  */
+class LockManager;
+
 class TransactionManager {
 public:
-    explicit TransactionManager(DatabaseManager& dbManager);
+    explicit TransactionManager(DatabaseManager& dbManager, LockManager* lockManager = nullptr);
+
+    void setLockManager(LockManager* lockManager) noexcept { lockManager_ = lockManager; }
+    LockManager* getLockManager() const noexcept { return lockManager_; }
 
     // Core Payment Operations (Business Logic)
     bool transfer(int senderAccountId, int receiverAccountId, double amount);
@@ -64,11 +69,13 @@ public:
 
 private:
     DatabaseManager& db_;
+    LockManager* lockManager_{nullptr};
     mutable std::string lastError_;
 
     void setLastError(const std::string& err) const;
     static int64_t toCents(double amount);
     static std::string formatAmount(double amount);
+    static int nextLogicalTxId();
 };
 
 } // namespace paylock
