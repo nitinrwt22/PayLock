@@ -1,7 +1,7 @@
 #ifndef PAYLOCK_TRANSACTION_MANAGER_H
 #define PAYLOCK_TRANSACTION_MANAGER_H
 
-#include "../database/DatabaseManager.h"
+#include "database/DatabaseManager.h"
 #include <memory>
 #include <vector>
 #include <optional>

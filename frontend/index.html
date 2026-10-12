@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PayLock — Concurrent Transaction Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="brand">
+                <span class="logo-icon">🔒</span>
+                <h1>PayLock Dashboard</h1>
+            </div>
+            <div class="system-status">
+                <span class="status-indicator online"></span>
+                <span>System Online (C++ Engine + MySQL)</span>
+            </div>
+        </header>
+
+        <!-- Metrics Overview -->
+        <section class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">Active Accounts</div>
+                <div class="metric-value" id="val-accounts">3</div>
+                <div class="metric-sub">Nitin (101), Ansh (102), Megha (103)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Active Threads</div>
+                <div class="metric-value" id="val-threads">4</div>
+                <div class="metric-sub">std::thread workers</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Total Transactions</div>
+                <div class="metric-value" id="val-transactions">9</div>
+                <div class="metric-sub">8 Committed / 1 Rolled Back</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Avg Execution Time</div>
+                <div class="metric-value" id="val-time">22 ms</div>
+                <div class="metric-sub">High concurrency benchmark</div>
+            </div>
+        </section>
+
+        <!-- Main Content Grid -->
+        <div class="content-grid">
+            <!-- Account Balances & Quick Transfer -->
+            <div class="panel">
+                <h2>Account Balances</h2>
+                <div class="accounts-list" id="accounts-container">
+                    <!-- Populated via JS -->
+                </div>
+
+                <h3 style="margin-top: 24px;">Simulate Concurrent Transfer</h3>
+                <form id="transfer-form" class="transfer-form">
+                    <div class="form-row">
+                        <select id="sender-select" required>
+                            <option value="101">Account 101 (Nitin)</option>
+                            <option value="102">Account 102 (Ansh)</option>
+                            <option value="103">Account 103 (Megha)</option>
+                        </select>
+                        <span class="arrow">➔</span>
+                        <select id="receiver-select" required>
+                            <option value="102">Account 102 (Ansh)</option>
+                            <option value="101">Account 101 (Nitin)</option>
+                            <option value="103">Account 103 (Megha)</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <input type="number" id="transfer-amount" placeholder="Amount (₹)" value="2000" min="1" required>
+                        <button type="submit" class="btn btn-primary">Dispatch Thread</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Thread Pool & Lock Monitor -->
+            <div class="panel">
+                <h2>Concurrency & Lock Monitor (OS Layer)</h2>
+                <div class="threads-monitor" id="threads-container">
+                    <!-- Populated via JS -->
+                </div>
+
+                <div class="lock-state-box">
+                    <h3>Critical Section Status</h3>
+                    <div class="lock-status" id="lock-indicator">
+                        <span class="lock-icon">🟢</span> Mutex Free (No active thread in critical section)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transaction History Table -->
+        <section class="panel full-width">
+            <h2>Recent Transactions (DBMS Layer)</h2>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Tx ID</th>
+                            <th>Sender</th>
+                            <th>Receiver</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactions-table-body">
+                        <!-- Populated via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

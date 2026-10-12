@@ -1,6 +1,12 @@
-#include "../src/database/DatabaseManager.h"
-#include "../src/transaction/TransactionManager.h"
-#include "../src/concurrency/ConcurrentTransactionProcessor.h"
+#include "database/DatabaseManager.h"
+#include "transaction/TransactionManager.h"
+#include "concurrency/ConcurrencyManager.h"
+#include "concurrency/ConcurrentTransactionProcessor.h"
+#include "locking/LockManager.h"
+#include "deadlock/DeadlockDetector.h"
+#include "recovery/RecoveryManager.h"
+#include "resources/ResourceManager.h"
+#include "logging/Logger.h"
 #include <iostream>
 #include <cassert>
 #include <ctime>
@@ -177,7 +183,73 @@ void runTests() {
     std::cout << "PASSED (Overdraft prevented: 1 successful, 1 failed, balance remains ₹" 
               << b101_od << ")\n";
 
-    std::cout << "\n[ALL 14 UNIT, INTEGRATION & CONCURRENCY TESTS PASSED SUCCESSFULLY!]\n";
+    // =========================================================================
+    // MODULAR SUBSYSTEM INTERFACE TESTS (FOUNDATION FOR DAY 4+)
+    // =========================================================================
+
+    std::cout << "\n--- ARCHITECTURAL SUBSYSTEM INTERFACE TESTS ---\n";
+
+    // Test 15: Logger Subsystem
+    std::cout << "Test 15: Testing Logger subsystem... ";
+    paylock::Logger::setLogLevel(paylock::LogLevel::DEBUG);
+    assert(paylock::Logger::getLogLevel() == paylock::LogLevel::DEBUG);
+    paylock::Logger::info("Logger operational", "TestSuite");
+    paylock::Logger::setLogLevel(paylock::LogLevel::INFO);
+    std::cout << "PASSED\n";
+
+    // Test 16: LockManager Interface
+    std::cout << "Test 16: Testing LockManager lock acquisition & release... ";
+    paylock::LockManager lockMgr;
+    assert(!lockMgr.isAccountLocked(101));
+    bool lockAcquired = lockMgr.acquireLock(1001, 101, paylock::LockMode::EXCLUSIVE);
+    assert(lockAcquired);
+    assert(lockMgr.isAccountLocked(101));
+    bool lockReleased = lockMgr.releaseLock(1001, 101);
+    assert(lockReleased);
+    assert(!lockMgr.isAccountLocked(101));
+    std::cout << "PASSED\n";
+
+    // Test 17: DeadlockDetector Cycle Detection
+    std::cout << "Test 17: Testing DeadlockDetector WFG cycle detection... ";
+    paylock::DeadlockDetector detector;
+    // Build cycle: T1 -> T2 -> T3 -> T1
+    detector.addWaitForEdge(1, 2);
+    detector.addWaitForEdge(2, 3);
+    detector.addWaitForEdge(3, 1);
+    std::vector<int> cycle;
+    bool hasDeadlock = detector.hasDeadlock(cycle);
+    assert(hasDeadlock);
+    assert(!cycle.empty());
+    // Break cycle by removing T1
+    detector.removeTransaction(1);
+    std::vector<int> cycleAfter;
+    assert(!detector.hasDeadlock(cycleAfter));
+    std::cout << "PASSED (Cycle detected and resolved)\n";
+
+    // Test 18: RecoveryManager Victim Selection
+    std::cout << "Test 18: Testing RecoveryManager victim selection... ";
+    paylock::RecoveryManager recoveryMgr;
+    std::vector<int> deadlockedTxs = {101, 105, 103};
+    int victim = recoveryMgr.selectVictim(deadlockedTxs, paylock::VictimPolicy::YOUNGEST_TRANSACTION);
+    assert(victim == 105);
+    bool recovered = recoveryMgr.recoverDeadlock(victim, "Test abort");
+    assert(recovered);
+    assert(recoveryMgr.getRecoveryCount() == 1);
+    std::cout << "PASSED (Victim Tx #" << victim << " selected & recovered)\n";
+
+    // Test 19: ResourceManager Memory Page Management
+    std::cout << "Test 19: Testing ResourceManager page allocation & translation... ";
+    paylock::ResourceManager resMgr(16);
+    assert(resMgr.getAvailablePages() == 16);
+    bool pageAllocated = resMgr.requestMemoryPage(1001, 5);
+    assert(pageAllocated);
+    assert(resMgr.getAvailablePages() == 15);
+    resMgr.simulatePageAccess(1001, 8192); // Page 2, Offset 0
+    resMgr.releaseMemoryPages(1001);
+    assert(resMgr.getAvailablePages() == 16);
+    std::cout << "PASSED\n";
+
+    std::cout << "\n[ALL 19 UNIT, INTEGRATION, CONCURRENCY & ARCHITECTURE TESTS PASSED SUCCESSFULLY!]\n";
 }
 
 int main() {

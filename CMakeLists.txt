@@ -32,7 +32,7 @@ endif()
 
 # Include directories
 include_directories(
-    ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/backend/include
     /opt/homebrew/include
 )
 
@@ -49,16 +49,25 @@ link_directories(
     /opt/homebrew/lib
 )
 
-# Core Sources
+# Core Library Sources
 set(PAYLOCK_CORE_SOURCES
-    src/database/DatabaseManager.cpp
-    src/transaction/TransactionManager.cpp
-    src/concurrency/ConcurrentTransactionProcessor.cpp
+    backend/src/logging/Logger.cpp
+    backend/src/models/User.cpp
+    backend/src/models/Account.cpp
+    backend/src/models/Transaction.cpp
+    backend/src/database/DatabaseManager.cpp
+    backend/src/transaction/TransactionManager.cpp
+    backend/src/concurrency/ConcurrentTransactionProcessor.cpp
+    backend/src/concurrency/ConcurrencyManager.cpp
+    backend/src/locking/LockManager.cpp
+    backend/src/deadlock/DeadlockDetector.cpp
+    backend/src/recovery/RecoveryManager.cpp
+    backend/src/resources/ResourceManager.cpp
 )
 
 # Main Executable
 add_executable(paylock
-    src/main.cpp
+    backend/src/main.cpp
     ${PAYLOCK_CORE_SOURCES}
 )
 

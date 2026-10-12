@@ -1,302 +1,183 @@
-# PayLock: A Concurrent Payment Transaction Management System
+# PayLock — A Concurrent Payment Transaction Management System
 
-## Project Objective
-**PayLock** is a high-performance payment transaction management system designed to demonstrate core principles of **Operating Systems (OS)** and **Database Management Systems (DBMS)** within a unified C++ and MySQL architecture.
-
-The project demonstrates how concurrent financial transactions are processed safely, preventing race conditions, adhering to ACID transaction guarantees, and maintaining data consistency across accounts.
+**PayLock** is an enterprise-grade payment transaction processing engine designed to demonstrate the deep intersection of **Operating Systems (OS)** concurrency principles and **Database Management Systems (DBMS)** transactional consistency guarantees within a unified, high-performance C++ and MySQL architecture.
 
 ---
 
-## Key Concepts
-
-### Operating Systems (OS) Concepts
-- **Concurrency & Multithreading (Day 3+)**: Worker threads concurrently processing transactions.
-- **Mutual Exclusion & Locks (Day 3+)**: Thread synchronization using mutexes (`std::mutex`) and lock guards (`std::lock_guard`).
-- **Deadlock Detection & Handling (Day 4+)**: Wait-for graph (WFG) cycle detection and victim selection for rollback.
-- **Resource Management & Synchronization (Day 1+)**: RAII for safe connection handle destruction and mutex-protected query execution.
-
-### DBMS Concepts
-- **ACID Transactions**:
-  - **Atomicity**: Transfers are all-or-nothing units of work (`START TRANSACTION`, `COMMIT`, `ROLLBACK`).
-  - **Consistency**: Relational integrity and domain constraints (`CHECK (balance >= 0)`, `CHECK (amount > 0)`).
-  - **Isolation**: Serializability and row-level locking to avoid race conditions and dirty reads.
-  - **Durability**: Persistent storage backed by MySQL InnoDB engine.
-- **Write-Ahead Logging / Audit Trail**: Recording every lifecycle operation (`transaction_logs` table).
+## Problem
+High-throughput payment networks (such as UPI, SWIFT, and core banking gateways) encounter acute architectural challenges when processing thousands of concurrent fund transfers:
+1. **Concurrency Issues (OS Level)**: When multiple operating system worker threads inspect and manipulate shared account memory or database records simultaneously, non-atomic "Check-Then-Act" sequences cause Time-of-Check to Time-of-Use (TOCTOU) race conditions, data corruption, and catastrophic negative balance overdrafts.
+2. **Transaction Consistency Issues (DBMS Level)**: Partial transfer failures (e.g., deducting from sender but crashing before crediting receiver) violate consistency. Without strict ACID enforcement, dirty reads, non-repeatable reads, lost updates, and phantom data corrupt relational integrity.
+3. **Deadlock Hazards**: Concurrent cross-transfers (e.g., Thread 1 transferring Account A → Account B while Thread 2 transfers Account B → Account A) introduce circular resource-wait conditions, locking system execution indefinitely.
 
 ---
 
----
-
-## Development Milestones
-
-### Day 1 Completed (Foundational Infrastructure)
-- C++ project structure and build configuration (CMake & Make).
-- C++ ↔ MySQL connectivity via `libmysqlclient`.
-- Database initialization (`paylock_db`).
-- Schema definition (`users`, `accounts`, `transactions`, `transaction_logs`) with DECIMAL currency precision and CHECK constraints.
-- Seed data (`Nitin`: ₹10,000, `Ansh`: ₹5,000, `Megha`: ₹7,000).
-- Modular architecture with `DatabaseManager`, `TransactionManager`, and domain models.
-
-### Day 2 Completed (Core Payment Transaction System)
-- **Core Payment Business Logic**:
-  - `transfer(senderAccountId, receiverAccountId, amount)`: Atomic peer-to-peer fund transfers.
-  - `deposit(accountId, amount)`: External cash/system credit into an account.
-  - `withdraw(accountId, amount)`: Controlled debit preventing overdrafts.
-- **MySQL Transactions & ACID Foundation**:
-  - Strict transaction lifecycle management (`START TRANSACTION;` -> Operations -> `COMMIT;` / `ROLLBACK;`).
-  - Balance updates, transaction records, and audit logs executed within the same atomic database transaction.
-  - No autocommit for financial transfers.
-- **Transaction Status Lifecycle**:
-  - `PENDING` -> `PROCESSING` -> `COMMITTED` (successful) or `ROLLED_BACK` / `FAILED` (aborted).
-- **Write-Ahead Audit Logging (`transaction_logs`)**:
-  - Real-time logging of `TRANSFER_STARTED`, `SENDER_BALANCE_DEBITED`, `RECEIVER_BALANCE_CREDITED`, `TRANSACTION_COMMITTED`, `TRANSACTION_ROLLED_BACK`, and `TRANSFER_FAILED`.
-- **Controlled Failure & Atomicity Demonstration**:
-  - Demonstrated that overdrawn transfers (e.g. ₹15,000 transfer from an account holding ₹8,000) are cleanly rolled back, leaving balances completely untouched.
-- **Safe Database Practices**:
-  - Exact `DECIMAL(15, 2)` monetary calculations without floating-point inaccuracies.
-  - Query parameterization and input escaping against injection.
-  - Defense-in-depth: Application balance pre-validation + MySQL `CHECK (balance >= 0.00)` constraint enforcement.
-
-### Day 3 Completed (Concurrency & Synchronization)
-- **Multithreading with `std::thread`**:
-  - Independent concurrent worker threads dispatching payment transfers and withdrawals simultaneously.
-  - Real concurrency: All threads launched before joining, eliminating serialized thread execution.
-- **Mutual Exclusion & Critical Sections**:
-  - Critical section guarding shared account state using `std::mutex` and `std::lock_guard<std::mutex>`.
-  - Elimination of manual lock/unlock leaks via RAII.
-- **Controlled Race Condition Demonstration**:
-  - Safe in-memory demonstration proving WHY synchronization is needed:
-    - *Without Mutex*: Concurrent withdrawals suffer Time-of-Check to Time-of-Use (TOCTOU) races, driving balance into an illegal negative state (₹-3,000).
-    - *With Mutex*: Critical section serializes balance check and debit, approving one withdrawal and safely rejecting the second (balance preserved at ₹3,000).
-- **Thread Lifecycle & State Tracking**:
-  - Complete state transitions: `CREATED` -> `WAITING FOR MUTEX` -> `RUNNING` -> `COMPLETED` / `FAILED`.
-- **Thread-Safe Console Logging**:
-  - Dedicated static logging mutex (`consoleMutex_`) prevents interleaved terminal output across concurrent worker threads.
-- **Multi-Client Database Connection Isolation**:
-  - Dedicated per-thread `DatabaseManager` instances; each worker thread possesses its own MySQL connection handle and transaction context.
-- **Performance Benchmarking**:
-  - `std::chrono` runtime instrumentation tracking thread counts, execution times (ms), and transaction success/failure ratios.
+## Objective
+PayLock combines foundational **Operating Systems concepts** and **DBMS transaction guarantees** into a cohesive system:
+- **OS Concepts**: Multithreading (`std::thread`), mutex synchronization (`std::mutex`, `std::lock_guard`), critical section protection, thread state lifecycle tracking, Wait-For Graph (WFG) cycle detection, dynamic memory page allocation/translation simulation, and thread-safe logging.
+- **DBMS Concepts**: Strict ACID guarantees (Atomicity, Consistency, Isolation, Durability) backed by MySQL InnoDB, Write-Ahead Audit Logging (WAL), relational foreign key constraints, `CHECK` domains, and row-level 2-Phase Locking (2PL).
 
 ---
 
-## Day 3 — Concurrency & Synchronization Architecture
+## Current Architecture
 
-### 1. Why Concurrency is Required
-High-throughput payment networks (like UPI, Visa, or banking gateways) process thousands of transaction requests simultaneously. Running transactions sequentially on a single thread causes massive latency spikes and underutilizes modern multi-core CPUs. Multithreading enables concurrent transaction processing.
-
-### 2. How `std::thread` is Used
-Each incoming payment request is assigned to an independent `std::thread` instance. The processor launches all worker threads concurrently into the thread scheduler before synchronizing their completion using `.join()`.
-
-### 3. What the Critical Section is
-The critical section is the code segment where shared account state is inspected and modified. If multiple threads concurrently read an account balance, verify solvency, and execute debits without synchronization, both may pass the solvency check simultaneously, producing an overdraft.
-
-### 4. Why Mutex is Required
-A mutual exclusion lock (`std::mutex`) ensures that only one thread can execute within the critical section at any given time. If Thread 1 holds the lock, Thread 2 must wait until Thread 1 finishes and releases the lock.
-
-### 5. How Thread Synchronization Works
-We use `std::lock_guard<std::mutex>` (RAII). When a thread enters the critical section, it automatically acquires the mutex. When the scope exits (whether via regular return or exception), the mutex is automatically released, preventing deadlocks or abandoned locks.
-
-### 6. How Threads Interact with MySQL Transactions
-Each thread obtains its own isolated MySQL connection. Inside the synchronized critical section, the thread invokes `TransactionManager`, which executes `START TRANSACTION;`, updates sender and receiver balances, logs the operation in `transaction_logs`, and issues `COMMIT;` (or `ROLLBACK;`).
-
-### 7. Key Distinction: Mutex vs. Database Transactions
-| Concept | Scope | Problem Solved |
-|---|---|---|
-| **`std::mutex` (OS)** | C++ Application Memory | Prevents CPU-level race conditions and TOCTOU bugs across competing worker threads in application memory. |
-| **MySQL Transactions (DBMS)** | Database Engine (InnoDB) | Provides ACID guarantees (Atomicity, Consistency, Isolation levels, and disk Durability via WAL) across DB clients. |
-
-### 8. How Race Conditions are Prevented
-Race conditions are eliminated by serializing the "Check-Then-Act" sequence inside the critical section. A thread cannot be preempted between checking a balance and recording the debit.
+PayLock is organized into a modular layered architecture:
 
 ```text
-                    Concurrent Payment Requests
-                                 │
-           ┌─────────────────────┼─────────────────────┐
-           ▼                     ▼                     ▼
-     Worker Thread 1       Worker Thread 2       Worker Thread 3
-     (Dedicated DB Conn)   (Dedicated DB Conn)   (Dedicated DB Conn)
-           │                     │                     │
-           └─────────────────────┼─────────────────────┘
-                                 ▼
-                    [OS Application Layer]
-                   std::mutex (Critical Section)
-                     - Only 1 thread enters
-                     - Serializes balance check & debit
-                                 │
-                                 ▼
-                     TransactionManager
-                                 │
-                                 ▼
-                    [DBMS Storage Layer]
-                     MySQL Transaction
-                     - START TRANSACTION
-                     - Debit & Credit
-                     - Write-Ahead Log
-                     - COMMIT / ROLLBACK
+               ┌────────────────────────────────────────────────────────┐
+               │         Frontend Dashboard / Visualization             │
+               │            (HTML5 / CSS3 / JavaScript)                 │
+               └──────────────────────────┬─────────────────────────────┘
+                                          │ [PLANNED HTTP/REST]
+                                          ▼
+               ┌────────────────────────────────────────────────────────┐
+               │                    REST API Layer                      │
+               │        (HTTP Endpoints & Request Serialization)        │
+               └──────────────────────────┬─────────────────────────────┘
+                                          │
+                                          ▼
+               ┌────────────────────────────────────────────────────────┐
+               │                  TransactionManager                    │
+               │   - Transfer, Deposit, Withdraw business orchestration │
+               │   - ACID lifecycle: BEGIN, COMMIT, ROLLBACK            │
+               └──────────┬─────────────────────────────────┬───────────┘
+                          │                                 │
+                          ▼                                 ▼
+         ┌─────────────────────────────────┐   ┌────────────────────────┐
+         │       ConcurrencyManager        │   │    ResourceManager     │
+         │ - Worker threads (std::thread)  │   │ - Memory page alloc    │
+         │ - Critical sections & Mutex     │   │ - Virtual address tr.  │
+         └────────────────┬────────────────┘   └────────────────────────┘
+                          │
+                          ▼
+         ┌─────────────────────────────────┐
+         │           LockManager           │
+         │ - Shared / Exclusive row locks  │
+         │ - 2-Phase Locking (2PL) protocol│
+         │ - Lock table & wait queues      │
+         └────────────────┬────────────────┘
+                          │
+                          ▼
+         ┌─────────────────────────────────┐
+         │        DeadlockDetector         │
+         │ - Wait-For Graph (WFG) analysis │
+         │ - Cycle detection via DFS       │
+         └────────────────┬────────────────┘
+                          │
+                          ▼
+         ┌─────────────────────────────────┐
+         │         RecoveryManager         │
+         │ - Victim selection policies     │
+         │ - Transaction abort & rollback  │
+         └────────────────┬────────────────┘
+                          │
+                          ▼
+         ┌────────────────────────────────────────────────────────┐
+         │                  DatabaseManager                       │
+         │ - MySQL connection lifecycle (libmysqlclient)          │
+         │ - Prepared statements & SQL execution                  │
+         │ - WAL audit logging (transaction_logs)                 │
+         └────────────────────────────────────────────────────────┘
+
+    [Centralized Thread-Safe Logger receives telemetry across all subsystems]
+```
+
+### Modular Directory Structure
+```text
+PayLock/
+├── backend/
+│   ├── include/
+│   │   ├── database/       # DatabaseManager.h, DatabaseConfig.h
+│   │   ├── models/         # User.h, Account.h, Transaction.h, TransactionLog.h
+│   │   ├── transaction/    # TransactionManager.h
+│   │   ├── concurrency/    # ConcurrencyManager.h, ConcurrentTransactionProcessor.h
+│   │   ├── locking/        # LockManager.h (Shared / Exclusive locks)
+│   │   ├── deadlock/       # DeadlockDetector.h (WFG & Cycle detection)
+│   │   ├── recovery/       # RecoveryManager.h (Victim selection & abort)
+│   │   ├── resources/      # ResourceManager.h (Page allocation & translation)
+│   │   └── logging/        # Logger.h (Thread-safe multi-level telemetry)
+│   │
+│   └── src/
+│       ├── main.cpp        # System orchestrator & evaluation CLI
+│       ├── database/       # DatabaseManager.cpp
+│       ├── models/         # Model implementations
+│       ├── transaction/    # TransactionManager.cpp
+│       ├── concurrency/    # ConcurrencyManager.cpp, ConcurrentTransactionProcessor.cpp
+│       ├── locking/        # LockManager.cpp
+│       ├── deadlock/       # DeadlockDetector.cpp
+│       ├── recovery/       # RecoveryManager.cpp
+│       ├── resources/      # ResourceManager.cpp
+│       └── logging/        # Logger.cpp
+│
+├── database/
+│   ├── schema.sql          # Relational tables, CHECK constraints, FK cascades
+│   ├── seed.sql            # Seed accounts (Nitin: ₹10,000, Ansh: ₹5,000, Megha: ₹7,000)
+│   └── procedures.sql      # Stored procedures (sp_transfer_funds)
+│
+├── tests/
+│   └── test_db.cpp         # Comprehensive 19-test automated test suite
+│
+├── frontend/
+│   ├── index.html          # Interactive dark-mode dashboard
+│   ├── css/style.css       # Glassmorphism visual styles
+│   ├── js/app.js           # Client-side dynamic simulation & future API client
+│   └── README.md           # Frontend documentation
+│
+├── docs/
+│   ├── architecture.md     # Architectural blueprint & subsystem mapping
+│   ├── database.md         # Relational schema, normalization & ACID specification
+│   ├── concurrency.md      # Multithreading, synchronization & critical sections
+│   ├── deadlock.md         # WFG theory, detection algorithms & recovery strategies
+│   └── api.md              # REST API endpoint contracts
+│
+├── CMakeLists.txt          # CMake C++17 build specification
+├── Makefile                # Fast CLI compilation & test runner
+├── README.md               # Project documentation
+└── .gitignore              # Build and IDE artifact exclusions
 ```
 
 ---
 
-## How PayLock Handles a Payment
-
-The payment workflow illustrates the classic DBMS transaction processing pipeline:
-
-```text
-               C++ Application
-                      │
-                      ▼
-             TransactionManager
-                      │
-           [1. Pre-Validation]
-           - Amount > 0
-           - Sender != Receiver
-           - Sender & Receiver exist
-           - Sender balance >= Amount
-                      │
-                      ▼
-           [2. START TRANSACTION]
-                      │
-                      ▼
-          [3. INSERT Transaction] ────► Status: 'PROCESSING'
-                      │
-                      ▼
-           [4. Log: TRANSFER_STARTED]
-                      │
-                      ▼
-           [5. UPDATE Sender Balance] ──► Deduct Amount (CHECK balance >= 0)
-                      │
-                      ▼
-        [6. Log: SENDER_BALANCE_DEBITED]
-                      │
-                      ▼
-         [7. UPDATE Receiver Balance] ──► Add Amount
-                      │
-                      ▼
-       [8. Log: RECEIVER_BALANCE_CREDITED]
-                      │
-                      ▼
-             Everything Succeeded?
-                    /       \
-                  YES       NO (Validation / DB Error)
-                  /           \
-                 ▼             ▼
-       [UPDATE Status]     [ROLLBACK] ──► Discards all partial balance updates
-       Status: 'COMMITTED'     │
-                 │             ▼
-                 ▼      [INSERT Failure Audit]
-       [Log: COMMITTED] Status: 'ROLLED_BACK'
-                 │      Log: 'TRANSACTION_ROLLED_BACK'
-                 ▼             │
-             [COMMIT]          ▼
-                 │        Return False
-                 ▼
-            Return True
-```
-
----
-
-## ACID Properties in PayLock
-
-| Property | Implementation in PayLock |
-|---|---|
-| **Atomicity** | Money deduction and credit occur inside a single MySQL transaction. If any step fails (e.g. insufficient balance, network failure, or constraint violation), `ROLLBACK` undoes all partial updates, ensuring an "all-or-nothing" execution. |
-| **Consistency** | Database integrity is maintained before and after transactions via relational foreign keys (`fk_tx_sender`, `fk_tx_receiver`) and domain constraints (`chk_account_balance`, `chk_tx_amount`). |
-| **Isolation** | Single-threaded baseline established for Day 2. Full concurrent isolation levels, row-level locks, and thread synchronization will be implemented on Day 3. |
-| **Durability** | Once `COMMIT` executes, all state changes are permanently flushed to disk via MySQL InnoDB's Write-Ahead Log (WAL) and redo logs. |
-
----
-
-## Tech Stack
-- **Language**: C++ (C++17 / Apple Clang / GCC)
-- **Database**: MySQL 9.x (InnoDB Engine)
+## Technology Stack
+- **Language**: C++17 (Compiled with Apple Clang / GCC)
+- **Database**: MySQL 9.x (InnoDB Engine, ACID compliance, WAL redo logs)
 - **Database Driver**: MySQL C/C++ Client Library (`libmysqlclient` / `<mysql.h>`)
 - **Build System**: CMake (v3.15+) and Make
+- **Frontend Prototype**: HTML5, CSS3 (Modern Glassmorphic Dark UI), Vanilla JavaScript ES6
 
 ---
 
-## Project Structure
-```
-PayLock/
-├── CMakeLists.txt              # CMake build definition
-├── Makefile                    # Makefile for quick build & test
-├── README.md                   # Documentation
-├── docs/
-│   └── architecture.md         # Architecture specification
-├── sql/
-│   ├── schema.sql              # Database schema & constraints
-│   └── seed.sql                # Seed data for testing
-├── src/
-│   ├── main.cpp                # Terminal demonstration entry point
-│   ├── concurrency/
-│   │   ├── ConcurrentTransactionProcessor.h   # Multithreading, mutex & race condition orchestrator
-│   │   └── ConcurrentTransactionProcessor.cpp # Thread lifecycle & sync implementation
-│   ├── database/
-│   │   ├── DatabaseManager.h   # MySQL connection & query interface
-│   │   └── DatabaseManager.cpp # Implementation with RAII & mutex locking
-│   ├── models/
-│   │   ├── Account.h           # Account model
-│   │   ├── Transaction.h       # Transaction model
-│   │   ├── TransactionLog.h    # Transaction log model
-│   │   └── User.h              # User model
-│   └── transaction/
-│       ├── TransactionManager.h   # High-level transaction manager
-│       └── TransactionManager.cpp # Business orchestration
-└── tests/
-    └── test_db.cpp             # Unit, integration & concurrency tests
-```
+## Current Status
+
+| Subsystem / Module | Responsibility | Status |
+|---|---|---|
+| **DatabaseManager** | MySQL connection pool, prepared queries, transaction commands | **[BUILT]** |
+| **Domain Models** | User, Account, Transaction, TransactionLog value objects | **[BUILT]** |
+| **TransactionManager** | Transfer, deposit, withdraw, balance validation, ACID rollback | **[BUILT]** |
+| **Concurrent Processor** | `std::thread` concurrent workers, race-condition prevention, mutex guards | **[BUILT]** |
+| **Logger** | Centralized thread-safe console & structured event logging | **[BUILT]** |
+| **ConcurrencyManager** | Facade for thread execution, worker scheduling & contention control | **[BUILT]** |
+| **LockManager** | Shared (S) and Exclusive (X) 2-Phase Locking interface and stub | **[IN PROGRESS / STUBBED]** |
+| **DeadlockDetector** | Wait-For Graph (WFG) cycle detection interface and DFS stub | **[IN PROGRESS / STUBBED]** |
+| **RecoveryManager** | Deadlock victim selection policies and transaction rollback stub | **[IN PROGRESS / STUBBED]** |
+| **ResourceManager** | Virtual address to page translation and resource allocation stub | **[IN PROGRESS / STUBBED]** |
+| **Frontend Prototype** | Interactive web dashboard visualizing balances, threads, and logs | **[BUILT (Prototype)]** |
+| **REST API Layer** | Embedded HTTP server exposing `/api/transactions` and `/api/locks` | **[PLANNED]** |
 
 ---
 
-## Database Schema
+## Database Setup
 
-### 1. `users` Table
-| Column | Type | Constraints | Description |
-|---|---|---|---|
-| `user_id` | `INT` | `PRIMARY KEY, AUTO_INCREMENT` | Unique identifier for each user |
-| `name` | `VARCHAR(100)` | `NOT NULL` | User full name |
-| `email` | `VARCHAR(150)` | `NOT NULL, UNIQUE` | Unique email address |
-| `created_at` | `TIMESTAMP` | `DEFAULT CURRENT_TIMESTAMP` | Registration timestamp |
-
-### 2. `accounts` Table
-| Column | Type | Constraints | Description |
-|---|---|---|---|
-| `account_id` | `INT` | `PRIMARY KEY` | Account number (e.g. 101, 102) |
-| `user_id` | `INT` | `NOT NULL, FK -> users(user_id)` | Account owner |
-| `balance` | `DECIMAL(15, 2)` | `NOT NULL, CHECK (balance >= 0.00)` | Non-negative account balance |
-| `created_at` | `TIMESTAMP` | `DEFAULT CURRENT_TIMESTAMP` | Account creation timestamp |
-
-### 3. `transactions` Table
-| Column | Type | Constraints | Description |
-|---|---|---|---|
-| `transaction_id` | `INT` | `PRIMARY KEY, AUTO_INCREMENT` | Unique transaction ID (starts at 1001) |
-| `sender_account` | `INT` | `NULL, FK -> accounts(account_id)` | Sender account ID (NULL / 0 = cash deposit) |
-| `receiver_account` | `INT` | `NULL, FK -> accounts(account_id)` | Receiver account ID (NULL / 0 = withdrawal) |
-| `amount` | `DECIMAL(15, 2)` | `NOT NULL, CHECK (amount > 0.00)` | Transfer amount (must be positive) |
-| `status` | `ENUM` | `'PENDING', 'PROCESSING', 'COMMITTED', 'ROLLED_BACK', 'FAILED'` | Transaction state |
-| `created_at` | `TIMESTAMP` | `DEFAULT CURRENT_TIMESTAMP` | Timestamp of initiation |
-
-### 4. `transaction_logs` Table
-| Column | Type | Constraints | Description |
-|---|---|---|---|
-| `log_id` | `INT` | `PRIMARY KEY, AUTO_INCREMENT` | Unique log entry ID |
-| `transaction_id` | `INT` | `NOT NULL, FK -> transactions(transaction_id)` | Associated transaction |
-| `operation` | `VARCHAR(50)` | `NOT NULL` | Operation type (e.g., SENDER_BALANCE_DEBITED) |
-| `message` | `TEXT` | `NULL` | Informational audit trace |
-| `created_at` | `TIMESTAMP` | `DEFAULT CURRENT_TIMESTAMP` | Log record timestamp |
-
----
-
-## How to Configure MySQL
-
-### 1. Apply Schema and Seed Data
-Run the SQL scripts using the MySQL command line client:
+### 1. Execute SQL Scripts
+Initialize the database schema, seed accounts, and stored procedures in MySQL:
 ```bash
-mysql -u root -p < sql/schema.sql
-mysql -u root -p < sql/seed.sql
+mysql -u root -p < database/schema.sql
+mysql -u root -p < database/seed.sql
+mysql -u root -p < database/procedures.sql
 ```
 
 ### 2. Configure Environment Variables (Optional)
-The application connects with sensible local defaults (`host=127.0.0.1`, `user=root`, `database=paylock_db`, `port=3306`). You can customize the connection credentials via environment variables:
+Sensible defaults (`host=127.0.0.1`, `user=root`, `port=3306`, `database=paylock_db`) are included. Override via environment variables if needed:
 ```bash
 export PAYLOCK_DB_HOST="127.0.0.1"
 export PAYLOCK_DB_USER="root"
@@ -307,11 +188,11 @@ export PAYLOCK_DB_PORT="3306"
 
 ---
 
-## How to Build
+## Build Instructions
 
-### Option A: Using Make (Recommended for fast build)
+### Option A: Using Make (Fastest)
 ```bash
-# Build main binary and test suite
+# Compile both the main application and test suite
 make
 
 # Clean build artifacts
@@ -328,165 +209,44 @@ cmake --build .
 
 ---
 
-## How to Run
+## Run Instructions
 
-### Run Main Demonstration:
+### 1. Run the Main Demonstration
 ```bash
-# Direct binary execution
 ./paylock
-
-# Or via make
+# Or via make:
 make run
 ```
+The demonstration runs:
+- Day 1: Foundational database connectivity & schema verification
+- Day 2: ACID transactions, peer-to-peer transfers, deposits, withdrawals, and rollback handling
+- Day 3: Multithreaded concurrent execution, mutex synchronization, and in-memory race condition benchmarks
+- Subsystem Telemetry: Architectural subsystem verification (Logger, LockManager, DeadlockDetector, RecoveryManager, ResourceManager)
 
-### Run Test Suite:
+### 2. Run the Automated Test Suite
 ```bash
-# Direct binary execution
 ./test_db
-
-# Or via make
+# Or via make:
 make test
+```
+Executes all 19 unit, integration, concurrency, and architecture tests.
+
+### 3. Open the Frontend Dashboard
+```bash
+# Option 1: Direct browser launch
+open frontend/index.html
+
+# Option 2: Local HTTP server
+python3 -m http.server 8080 --directory frontend
 ```
 
 ---
 
-## Example Output
-
-### Running `./paylock`:
-```text
-==================================================
-        PAYLOCK PAYMENT TRANSACTION SYSTEM        
-   Day 2: Core ACID Transactions & DBMS Engine    
-==================================================
-
-[Database]: Connected to MySQL successfully.
-
-Initial Account State:
-------------------------------------------------
-Account 101 (Nitin): ₹10000
-Account 102 (Ansh): ₹5000
-Account 103 (Megha): ₹7000
-
->>> TEST 1: Transfer ₹2,000 from Account 101 -> Account 102
-Result    : SUCCESS (COMMITTED)
-Balances  : Account 101 = ₹8000 | Account 102 = ₹7000
-Validation: PASSED
-
->>> TEST 2: Transfer ₹15,000 from Account 101 -> Account 103 (Insufficient Funds)
-Result    : REJECTED & ROLLED_BACK (As expected)
-Reason    : Insufficient funds in Account 101 (Available: ₹8000.00, Requested: ₹15000.00)
-Balances  : Account 101 remains ₹8000 | Account 103 remains ₹7000
-Validation: PASSED (Atomicity preserved)
-
->>> TEST 3: Deposit ₹1,000 into Account 102
-Result    : SUCCESS (COMMITTED)
-Balances  : Account 102 = ₹8000
-Validation: PASSED
-
->>> TEST 4: Withdraw ₹2,000 from Account 103
-Result    : SUCCESS (COMMITTED)
-Balances  : Account 103 = ₹5000
-Validation: PASSED
-
->>> TEST 5: Withdraw ₹10,000 from Account 103 (Exceeds ₹5,000 Balance)
-Result    : REJECTED & ROLLED_BACK (As expected)
-Reason    : Insufficient funds in Account 103 (Available: ₹5000.00, Requested: ₹10000.00)
-Balances  : Account 103 remains ₹5000
-Validation: PASSED (Integrity preserved)
-
-========================================
-            ACCOUNT BALANCES
-========================================
-Account 101 (Nitin ) : ₹8000.00
-Account 102 (Ansh  ) : ₹8000.00
-Account 103 (Megha ) : ₹5000.00
-========================================
-
-========================================
-          PAYLOCK TRANSACTIONS
-========================================
-
-ID     FROM    TO      AMOUNT       STATUS
-------------------------------------------------
-1001   101     102     ₹2000      COMMITTED
-1002   101     103     ₹15000     ROLLED_BACK
-1003   0       102     ₹1000      COMMITTED
-1004   103     0       ₹2000      COMMITTED
-1005   103     0       ₹10000     ROLLED_BACK
-
-========================================
-
-========================================
-     TRANSACTION AUDIT LOG (WAL TRACE)  
-========================================
-
-Transaction #1001
--------------------------------
-TRANSFER_STARTED
-Sender: 101
-Receiver: 102
-Amount: ₹2000.00
-
-SENDER_BALANCE_DEBITED
-Debited ₹2000.00 from Account 101
-
-RECEIVER_BALANCE_CREDITED
-Credited ₹2000.00 to Account 102
-
-TRANSACTION_COMMITTED
-Transfer completed and permanently committed to MySQL.
-
-----------------------------------------
-Controlled Failure Audit Log (#1002):
-----------------------------------------
-Transaction #1002
--------------------------------
-TRANSFER_STARTED
-Sender: 101
-Receiver: 103
-Amount: ₹15000.00
-
-TRANSFER_FAILED
-Insufficient funds in Account 101 (Available: ₹8000.00, Requested: ₹15000.00)
-
-TRANSACTION_ROLLED_BACK
-Transaction rolled back due to insufficient sender balance. Balances unchanged.
-
-==================================================
-          ACID PROPERTIES DEMONSTRATION           
-==================================================
-[ATOMICITY]   : Either all operations succeed or all are undone.
-                Verified: Tx #1001 fully debited and credited.
-                Verified: Tx #1002 insufficient balance rolled back completely;
-                no partial deduction occurred.
-
-[CONSISTENCY] : Schema constraints (balance >= 0.00, amount > 0.00)
-                and foreign keys ensure database validity before and after.
-
-[ISOLATION]   : Single-threaded baseline validated for Day 2.
-                Full concurrent isolation with multithreading & locks
-                will be demonstrated on Day 3.
-
-[DURABILITY]  : Once COMMIT executes, changes are durably persisted
-                to MySQL InnoDB transaction log (WAL).
-==================================================
-```
-
-### Running `./test_db`:
-```text
-[TEST RUNNER] Starting Day 1 & Day 2 PayLock Automated Tests...
-Test 1: Establishing connection... PASSED
-Test 2: Verifying seed accounts count... PASSED (3 accounts found)
-Test 3: Checking Account 101 balance... PASSED (₹8000)
-Test 4: Verifying DBMS Constraint (Negative balance should fail)... PASSED (chk_account_balance enforced)
-Test 5: Transfer ₹2,000 from 101 -> 102 (Happy Path)... PASSED (101=₹8000, 102=₹7000, COMMITTED)
-Test 6: Transfer ₹15,000 from 101 -> 103 (Insufficient Balance)... PASSED (Rollback verified, balances intact)
-Test 7: Transfer to non-existent account (Account 9999)... PASSED (Rejected without debiting sender)
-Test 8: Deposit ₹1,000 into Account 102... PASSED (102=₹8000)
-Test 9: Withdraw ₹2,000 from Account 103... PASSED (103=₹5000)
-Test 10: Withdraw ₹10,000 from Account 103 (Overdraft attempt)... PASSED (Overdraft prevented, balance unchanged)
-Test 11: Verifying WAL audit log entries exist... PASSED (35 log records verified)
-
-[ALL 11 UNIT & INTEGRATION TESTS PASSED SUCCESSFULLY!]
-```
-
+## Future Modules
+In upcoming phases, the established interfaces will be populated with full implementations:
+- **Lock Manager**: Granular row-level 2-Phase Locking (2PL), shared read locks, exclusive write locks, lock wait queues.
+- **Deadlock Detection**: Periodic Wait-For Graph (WFG) cycle detection using Tarjan's or Kosaraju's DFS cycle discovery.
+- **Deadlock Recovery**: Automated victim selection (Youngest Transaction, Lowest Cost, Fewest Locks), transaction abort, lock release, and automatic client retry.
+- **Resource Management**: Operating systems paging simulation, memory frame allocation algorithms (FIFO, LRU), and resource request/allocation matrices.
+- **REST API Layer**: Embedded C++ HTTP server bridging the C++ backend to the web dashboard via standard JSON endpoints (`GET /api/accounts`, `POST /api/transfer`, `GET /api/deadlocks`).
+- **Frontend Integration**: Full live bi-directional dashboard synchronization with real-time WebSocket or Server-Sent Events (SSE) telemetry.

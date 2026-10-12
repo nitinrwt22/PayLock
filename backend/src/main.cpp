@@ -1,6 +1,12 @@
 #include "database/DatabaseManager.h"
 #include "transaction/TransactionManager.h"
+#include "concurrency/ConcurrencyManager.h"
 #include "concurrency/ConcurrentTransactionProcessor.h"
+#include "logging/Logger.h"
+#include "locking/LockManager.h"
+#include "deadlock/DeadlockDetector.h"
+#include "recovery/RecoveryManager.h"
+#include "resources/ResourceManager.h"
 #include <iostream>
 #include <iomanip>
 #include <cassert>

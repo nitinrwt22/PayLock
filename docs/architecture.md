@@ -1,77 +1,119 @@
 # PayLock Architecture & Design Documentation
 
-## Overview
-PayLock is a concurrent payment transaction management system designed for Project-Based Learning (PBL). It unifies core principles from Operating Systems (OS) and Database Management Systems (DBMS).
+## System Overview
+**PayLock** is an enterprise-grade concurrent payment transaction management system designed for Project-Based Learning (PBL). It bridges principles from **Operating Systems (OS)** and **Database Management Systems (DBMS)** to guarantee consistency, isolation, and durability under high concurrency.
 
 ---
 
-## Key Core Concepts
+## Conceptual Architecture Flow
 
-### 1. Operating Systems (OS)
-- **Concurrency & Multithreading (Day 3+)**: Worker threads processing multiple transaction requests concurrently.
-- **Mutual Exclusion & Locks (Day 3+)**: Thread synchronization using mutexes, reader-writer locks, and transaction-level resource locks.
-- **Deadlock Handling (Day 4+)**: Detection algorithms (Wait-For Graph / cycle detection) and resolution via victim rollback.
-- **Thread-Safety (Day 1)**: Internal mutex protection (`std::mutex`) within `DatabaseManager` ensuring serial execution on shared connection handles.
+```text
+               Frontend / Dashboard [IN PROGRESS]
+                         │
+                         ▼
+                  API Layer [PLANNED]
+                         │
+                         ▼
+             Transaction Manager [BUILT]
+                         │
+                         ▼
+             Concurrency Manager [BUILT]
+                         │
+                         ▼
+                Lock Manager [IN PROGRESS]
+                         │
+                         ▼
+              Deadlock Detector [IN PROGRESS]
+                         │
+                         ▼
+              Recovery Manager [IN PROGRESS]
+                         │
+                         ▼
+              Database / MySQL [BUILT]
 
-### 2. Database Management Systems (DBMS)
-- **ACID Guarantees**:
-  - **Atomicity**: Either all operations in a payment transfer succeed (debit sender + credit receiver + write log), or none do (`ROLLBACK`).
-  - **Consistency**: Database constraints (e.g., `CHECK (balance >= 0)`, `CHECK (amount > 0)`) ensure accounts never enter illegal states.
-  - **Isolation**: Transaction isolation levels preventing dirty reads, non-repeatable reads, and phantom reads.
-  - **Durability**: Committed transactions are persisted to disk via MySQL InnoDB's write-ahead logging (WAL) and doublewrite buffering.
-- **Transaction Logs**: Audit logs (`transaction_logs` table) recording lifecycle operations (`START`, `DEBIT`, `CREDIT`, `COMMIT`, `ROLLBACK`).
+                  Resource Manager [IN PROGRESS]
+                         ↕
+         Concurrency / Transaction System
 
----
-
-## Day 1 Architecture & Modular Layout
-
+                 Centralized Logger [BUILT]
+           (Receives events across all layers)
 ```
+
+---
+
+## Module Breakdown & Implementation Status
+
+| Module | Category | Primary Responsibility | Status |
+|---|---|---|---|
+| **DatabaseManager** | DBMS | MySQL connection pooling, queries, prepared statements, and transactional primitives. | `[BUILT]` |
+| **Models (`User`, `Account`, `Transaction`, `TransactionLog`)** | Domain | Type-safe financial data representations with strict non-floating decimal fields. | `[BUILT]` |
+| **TransactionManager** | DBMS / Core | Financial transfer, deposit, withdrawal workflows, and ACID lifecycle coordination (`START TRANSACTION`, `COMMIT`, `ROLLBACK`). | `[BUILT]` |
+| **ConcurrencyManager** | OS | Multithreading with `std::thread`, thread lifecycle state transitions, and thread-safe batch processing. | `[BUILT]` |
+| **ConcurrentTransactionProcessor** | OS | Critical section protection via `std::mutex` / `std::lock_guard`, preventing TOCTOU race conditions. | `[BUILT]` |
+| **Logger** | Cross-cutting | Thread-safe, synchronized logging supporting `DEBUG`, `INFO`, `WARNING`, `ERROR` levels with component tags. | `[BUILT]` |
+| **LockManager** | OS / DBMS | Shared (S) and Exclusive (X) row-level account locking adhering to Strict 2-Phase Locking (2PL). | `[IN PROGRESS]` |
+| **DeadlockDetector** | OS / DBMS | Wait-For Graph (WFG) maintenance and directed cycle detection algorithms (Tarjan's / DFS). | `[IN PROGRESS]` |
+| **RecoveryManager** | OS / DBMS | Deadlock resolution via victim selection policies and transaction rollback. | `[IN PROGRESS]` |
+| **ResourceManager** | OS | Memory allocation, resource tracking, and OS paging simulation abstractions. | `[IN PROGRESS]` |
+| **API Layer** | Distributed | REST / HTTP endpoints connecting client applications to TransactionManager. | `[PLANNED]` |
+| **Frontend Dashboard** | Presentation | Real-time transaction visualization, thread state monitors, and lock inspection dashboard. | `[IN PROGRESS]` |
+
+---
+
+## Operating Systems (OS) Concepts Mapping
+
+1. **Multithreading**: Independent worker threads (`std::thread`) running concurrently across CPU cores.
+2. **Mutual Exclusion**: Guarding critical sections with `std::mutex` and `std::lock_guard`.
+3. **Race Conditions**: Preventing Time-of-Check to Time-of-Use (TOCTOU) inconsistencies on shared accounts.
+4. **Thread States**: Tracking `CREATED` -> `WAITING_FOR_MUTEX` -> `RUNNING` -> `COMPLETED` / `FAILED`.
+5. **Deadlock Management**: Detection via Wait-For Graph (WFG) cycle analysis and victim rollback.
+6. **Resource Management**: Safe vs. unsafe states, resource graphs, and memory page simulation.
+
+---
+
+## Database Management Systems (DBMS) Concepts Mapping
+
+1. **ACID Transactions**:
+   - **Atomicity**: Transfers execute completely or abort with zero side-effects via MySQL `ROLLBACK`.
+   - **Consistency**: Enforced through `DECIMAL(15, 2)` monetary types, `CHECK (balance >= 0.00)`, and Foreign Key constraints.
+   - **Isolation**: Per-thread connection sessions preventing socket corruption; future row-level locks enforcing serializability.
+   - **Durability**: Guaranteed by MySQL InnoDB's Write-Ahead Log (WAL) and redo log flushing on `COMMIT`.
+2. **Audit Logging**: Write-Ahead Logging in `transaction_logs` capturing `TRANSFER_STARTED`, `SENDER_BALANCE_DEBITED`, `RECEIVER_BALANCE_CREDITED`, `TRANSACTION_COMMITTED`, `TRANSACTION_ROLLED_BACK`.
+3. **Stored Procedures**: Encapsulated database-level transaction routines in `database/procedures.sql`.
+
+---
+
+## Directory Organization
+
+```text
 PayLock/
-├── CMakeLists.txt              # Cross-platform build configuration
-├── Makefile                    # Fast direct compilation
-├── README.md                   # Project overview, setup, and instructions
-├── docs/                       # Architecture and project documentation
-│   └── architecture.md
-├── sql/                        # SQL DDL & Seed scripts
-│   ├── schema.sql              # Table definitions and constraints
-│   └── seed.sql                # Initial test users & accounts
-├── src/                        # Core C++ implementation
-│   ├── main.cpp                # Day 3 verification entry point
-│   ├── concurrency/            # Day 3 Concurrency & OS Layer
-│   │   ├── ConcurrentTransactionProcessor.h
-│   │   └── ConcurrentTransactionProcessor.cpp
-│   ├── database/
-│   │   ├── DatabaseManager.h   # MySQL C client wrapper & RAII lifecycle
-│   │   └── DatabaseManager.cpp
-│   ├── models/                 # Domain data structures
-│   │   ├── Account.h
-│   │   ├── Transaction.h
-│   │   ├── TransactionLog.h
-│   │   └── User.h
-│   └── transaction/
-│       ├── TransactionManager.h   # Business layer transaction orchestrator
-│       └── TransactionManager.cpp
-└── tests/
-    └── test_db.cpp             # Automated integration & concurrency tests
+├── backend/
+│   ├── include/                # Public modular C++ headers
+│   │   ├── database/
+│   │   ├── models/
+│   │   ├── transaction/
+│   │   ├── concurrency/
+│   │   ├── locking/
+│   │   ├── deadlock/
+│   │   ├── recovery/
+│   │   ├── resources/
+│   │   └── logging/
+│   └── src/                    # Implementations & main executable
+│       ├── main.cpp
+│       ├── database/
+│       ├── models/
+│       ├── transaction/
+│       ├── concurrency/
+│       ├── locking/
+│       ├── deadlock/
+│       ├── recovery/
+│       ├── resources/
+│       └── logging/
+├── database/                   # Relational DDL, seed data & stored procedures
+├── tests/                      # Automated unit, integration & concurrency suite
+├── frontend/                   # UI dashboard prototype
+├── docs/                       # Architectural and technical documentation
+├── CMakeLists.txt              # Primary cross-platform build
+├── Makefile                    # Developer quick-build tool
+└── README.md                   # Project overview & roadmap
 ```
-
----
-
-## Day 3 Completed: Concurrency, Multithreading & Synchronization
-The OS concurrency layer is fully operational and integrated with MySQL:
-1. `ConcurrentTransactionProcessor` coordinating worker threads via `std::thread`.
-2. Critical section protection via `std::mutex` and `std::lock_guard`.
-3. In-memory Race Condition demonstration contrasting unsynchronized TOCTOU races with mutex-protected mutual exclusion.
-4. Per-thread isolated database connections preventing socket contention.
-5. Real concurrent transfer processing across accounts with programmatic balance verification against MySQL.
-6. Same-account concurrent withdrawal contention and overdraft rejection.
-7. Thread-safe atomic console logging via dedicated `consoleMutex_`.
-8. Execution performance measurement using `std::chrono`.
-
----
-
-## Forward Compatibility for Day 4 Sprint
-Day 4 will introduce Deadlock Handling & Advanced Lock Management:
-1. Deadlock detection via Wait-For Graph (WFG) cycle detection.
-2. Deadlock resolution via victim transaction abort & rollback.
-3. Fine-grained row-level / account-level locking protocols.

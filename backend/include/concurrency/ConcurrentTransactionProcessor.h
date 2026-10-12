@@ -1,8 +1,8 @@
 #ifndef PAYLOCK_CONCURRENT_TRANSACTION_PROCESSOR_H
 #define PAYLOCK_CONCURRENT_TRANSACTION_PROCESSOR_H
 
-#include "../database/DatabaseManager.h"
-#include "../transaction/TransactionManager.h"
+#include "database/DatabaseManager.h"
+#include "transaction/TransactionManager.h"
 #include <string>
 #include <vector>
 #include <thread>

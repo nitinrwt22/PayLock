@@ -13,10 +13,10 @@
 #include <optional>
 #include <mutex>
 #include <stdexcept>
-#include "../models/User.h"
-#include "../models/Account.h"
-#include "../models/Transaction.h"
-#include "../models/TransactionLog.h"
+#include "models/User.h"
+#include "models/Account.h"
+#include "models/Transaction.h"
+#include "models/TransactionLog.h"
 
 namespace paylock {
 
