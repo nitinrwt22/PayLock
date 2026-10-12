@@ -1,0 +1,18 @@
+# Binaries & Object Files
+paylock
+test_db
+*.o
+*.a
+*.so
+*.dylib
+
+# Build directories
+build/
+bin/
+out/
+
+# Language Server / Tool Cache
+.cache/
+compile_commands.json
+.DS_Store
+*.dSYM/

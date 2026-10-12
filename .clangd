@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - -std=c++17
+    - -I/Users/nitinrawat/PayLock/src
+    - -I/opt/homebrew/include
+    - -I/opt/homebrew/include/mysql
+    - -I/opt/homebrew/Cellar/mysql/9.6.0_1/include/mysql
+    - -Wno-unknown-warning-option
