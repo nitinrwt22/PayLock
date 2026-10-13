@@ -593,7 +593,365 @@ void runTests() {
     }
     std::cout << "PASSED (All worker jobs serialized through LockManager; 0 leaked locks)\n";
 
-    std::cout << "\n[ALL 35 UNIT, TRANSACTION ENGINE, ACID, CONCURRENCY, ARCHITECTURE & LOCK MANAGER TESTS PASSED SUCCESSFULLY!]\n";
+    // =========================================================================
+    // SECTION 5: DEADLOCK DETECTION SUBSYSTEM TESTS (STEP 5 SPECIFICATION)
+    // =========================================================================
+    std::cout << "\n--- SECTION 5: DEADLOCK DETECTION & WAIT-FOR GRAPH TESTS ---\n";
+
+    // Test 36: Empty Graph (Requirement 1)
+    std::cout << "Test 36: [Step 5 Requirement 1] Empty Wait-For Graph... ";
+    {
+        paylock::WaitForGraph graph;
+        paylock::DeadlockDetector detector;
+        assert(graph.empty());
+        assert(graph.vertexCount() == 0);
+        assert(graph.edgeCount() == 0);
+        auto cycles = detector.detectCycles(graph);
+        assert(cycles.empty());
+        auto report = detector.detectDeadlocks(graph);
+        assert(!report.deadlockDetected);
+        assert(report.cycles.empty());
+        assert(report.involvedTransactions.empty());
+    }
+    std::cout << "PASSED (Empty graph produces 0 cycles & clean report)\n";
+
+    // Test 37: Graph Without Edges (Isolated Vertices / Case A / Requirement 2)
+    std::cout << "Test 37: [Step 5 Requirement 2] Graph without edges (Isolated vertices T1, T2, T3)... ";
+    {
+        paylock::WaitForGraph graph;
+        graph.addVertex(1);
+        graph.addVertex(2);
+        graph.addVertex(3);
+        assert(graph.vertexCount() == 3);
+        assert(graph.edgeCount() == 0);
+        assert(graph.hasVertex(1) && graph.hasVertex(2) && graph.hasVertex(3));
+        paylock::DeadlockDetector detector;
+        auto report = detector.detectDeadlocks(graph);
+        assert(!report.deadlockDetected);
+        assert(report.cycles.empty());
+        assert(report.involvedTransactions.empty());
+    }
+    std::cout << "PASSED (Case A: No dependencies -> No deadlock detected)\n";
+
+    // Test 38: Acyclic Chain (Case B / Requirement 3)
+    std::cout << "Test 38: [Step 5 Requirement 3] Acyclic dependency chain (T1 -> T2 -> T3)... ";
+    {
+        paylock::WaitForGraph graph;
+        graph.addEdge(1, 2);
+        graph.addEdge(2, 3);
+        assert(graph.vertexCount() == 3);
+        assert(graph.edgeCount() == 2);
+        paylock::DeadlockDetector detector;
+        auto report = detector.detectDeadlocks(graph);
+        assert(!report.deadlockDetected);
+        assert(report.cycles.empty());
+    }
+    std::cout << "PASSED (Case B: Linear wait chain is not a deadlock)\n";
+
+    // Test 39: Two-Transaction Cycle (Case C / Requirement 4)
+    std::cout << "Test 39: [Step 5 Requirement 4] Two-transaction cycle (T1 -> T2 -> T1)... ";
+    {
+        paylock::WaitForGraph graph;
+        graph.addEdge(1, 2);
+        graph.addEdge(2, 1);
+        paylock::DeadlockDetector detector;
+        auto report = detector.detectDeadlocks(graph);
+        assert(report.deadlockDetected);
+        assert(report.cycles.size() == 1);
+        const auto& c = report.cycles[0];
+        assert(c.front() == c.back()); // Closing edge
+        assert((c == std::vector<int>{1, 2, 1}));
+        assert(report.involvedTransactions.size() == 2);
+        assert(report.involvedTransactions.count(1) && report.involvedTransactions.count(2));
+    }
+    std::cout << "PASSED (Case C: T1 -> T2 -> T1 circular wait detected)\n";
+
+    // Test 40: Three-Transaction Cycle (Case D / Requirement 5)
+    std::cout << "Test 40: [Step 5 Requirement 5] Three-transaction cycle (T1 -> T2 -> T3 -> T1)... ";
+    {
+        paylock::WaitForGraph graph;
+        graph.addEdge(1, 2);
+        graph.addEdge(2, 3);
+        graph.addEdge(3, 1);
+        paylock::DeadlockDetector detector;
+        auto report = detector.detectDeadlocks(graph);
+        assert(report.deadlockDetected);
+        assert(report.cycles.size() == 1);
+        const auto& c = report.cycles[0];
+        assert(c.front() == c.back());
+        assert((c == std::vector<int>{1, 2, 3, 1}));
+        assert(report.involvedTransactions.size() == 3);
+        assert(report.involvedTransactions.count(1) && report.involvedTransactions.count(2) && report.involvedTransactions.count(3));
+    }
+    std::cout << "PASSED (Case D: 3-cycle T1 -> T2 -> T3 -> T1 correctly recognized)\n";
+
+    // Test 41: Disconnected Graph with Cycle (Case F / Requirement 6)
+    std::cout << "Test 41: [Step 5 Requirement 6] Disconnected graph with cycle in one component... ";
+    {
+        paylock::WaitForGraph graph;
+        // Component A: Acyclic chain T4 -> T5
+        graph.addEdge(4, 5);
+        // Component B: Cycle T1 -> T2 -> T1
+        graph.addEdge(1, 2);
+        graph.addEdge(2, 1);
+        paylock::DeadlockDetector detector;
+        auto report = detector.detectDeadlocks(graph);
+        assert(report.deadlockDetected);
+        assert(report.cycles.size() == 1);
+        assert((report.cycles[0] == std::vector<int>{1, 2, 1}));
+        assert(report.involvedTransactions.count(1) && report.involvedTransactions.count(2));
+        assert(!report.involvedTransactions.count(4) && !report.involvedTransactions.count(5));
+    }
+    std::cout << "PASSED (Case F: Disconnected cycle detected regardless of search start)\n";
+
+    // Test 42: Cycle with Outgoing Non-Cycle Edge (Case E / Requirement 7)
+    std::cout << "Test 42: [Step 5 Requirement 7] Cycle with non-cycle outgoing edge (T1->T2->T3->T1, T3->T4)... ";
+    {
+        paylock::WaitForGraph graph;
+        graph.addEdge(1, 2);
+        graph.addEdge(2, 3);
+        graph.addEdge(3, 1);
+        graph.addEdge(3, 4); // Outgoing edge to non-cycle transaction
+        paylock::DeadlockDetector detector;
+        auto report = detector.detectDeadlocks(graph);
+        assert(report.deadlockDetected);
+        assert(report.cycles.size() == 1);
+        assert((report.cycles[0] == std::vector<int>{1, 2, 3, 1}));
+        assert(!report.involvedTransactions.count(4)); // T4 must not be in cycle
+    }
+    std::cout << "PASSED (Case E: T4 strictly excluded from cycle membership)\n";
+
+    // Test 43: Multiple Cycles and Duplicate Prevention (Requirement 8)
+    std::cout << "Test 43: [Step 5 Requirement 8] Multiple distinct cycles in graph... ";
+    {
+        paylock::WaitForGraph graph;
+        // Cycle 1: T1 <-> T2
+        graph.addEdge(1, 2);
+        graph.addEdge(2, 1);
+        // Cycle 2: T3 <-> T4
+        graph.addEdge(3, 4);
+        graph.addEdge(4, 3);
+        paylock::DeadlockDetector detector;
+        auto report = detector.detectDeadlocks(graph);
+        assert(report.deadlockDetected);
+        assert(report.cycles.size() == 2);
+        assert((report.cycles[0] == std::vector<int>{1, 2, 1}));
+        assert((report.cycles[1] == std::vector<int>{3, 4, 3}));
+        assert(report.involvedTransactions.size() == 4);
+    }
+    std::cout << "PASSED (Multiple distinct cycles detected without duplicates)\n";
+
+    // Test 44: Duplicate Edge Prevention (Requirement 9)
+    std::cout << "Test 44: [Step 5 Requirement 9] Duplicate edge insertion prevention... ";
+    {
+        paylock::WaitForGraph graph;
+        assert(graph.addEdge(10, 20));
+        assert(!graph.addEdge(10, 20)); // Duplicate edge must return false and not be added
+        assert(graph.edgeCount() == 1);
+        auto deps = graph.getDependencies(10);
+        assert(deps.size() == 1 && deps[0] == 20);
+    }
+    std::cout << "PASSED (Duplicate edge T10 -> T20 rejected)\n";
+
+    // Test 45: Correct Cycle Membership & Traversal Verification (Requirement 10)
+    std::cout << "Test 45: [Step 5 Requirement 10] Precise cycle membership with incoming & outgoing edges... ";
+    {
+        paylock::WaitForGraph graph;
+        graph.addEdge(5, 10);   // incoming to cycle
+        graph.addEdge(10, 20);  // cycle
+        graph.addEdge(20, 30);  // cycle
+        graph.addEdge(30, 10);  // cycle closing edge
+        graph.addEdge(30, 40);  // outgoing from cycle
+        paylock::DeadlockDetector detector;
+        auto report = detector.detectDeadlocks(graph);
+        assert(report.cycles.size() == 1);
+        const auto& c = report.cycles[0];
+        assert(c.front() == c.back());
+        assert((c == std::vector<int>{10, 20, 30, 10}));
+        assert(report.involvedTransactions.size() == 3);
+        assert(report.involvedTransactions.count(10) && report.involvedTransactions.count(20) && report.involvedTransactions.count(30));
+        assert(!report.involvedTransactions.count(5));
+        assert(!report.involvedTransactions.count(40));
+    }
+    std::cout << "PASSED (Only true cycle vertices T10, T20, T30 included)\n";
+
+    // Test 46: Graph Built from Real Lock Manager State (Requirement 11)
+    std::cout << "Test 46: [Step 5 Requirement 11] Building WFG directly from LockManager snapshot... ";
+    {
+        paylock::LockTableSnapshot snapshot;
+        // ACCOUNT:A101 held by T1 in EXCLUSIVE mode, T2 is waiting
+        paylock::ResourceSnapshot res101;
+        res101.accountId = 101;
+        res101.currentMode = paylock::LockMode::EXCLUSIVE;
+        res101.holders.insert(1);
+        res101.waitQueue.emplace_back(2, 101, paylock::LockMode::EXCLUSIVE, paylock::LockState::WAITING);
+        snapshot.resources[101] = res101;
+
+        paylock::DeadlockDetector detector;
+        auto wfg = detector.buildWaitForGraph(snapshot);
+        assert(wfg.vertexCount() == 2);
+        assert(wfg.hasEdge(2, 1));
+        assert(!wfg.hasEdge(1, 2));
+    }
+    std::cout << "PASSED (WFG accurately synthesized from in-memory snapshot)\n";
+
+    // Test 47: Correct Dependencies for Shared Locks (Requirement 12)
+    std::cout << "Test 47: [Step 5 Requirement 12] Shared lock multi-holder dependency generation... ";
+    {
+        // T1 and T2 both hold SHARED on A101; T3 requests EXCLUSIVE on A101
+        paylock::ResourceSnapshot res;
+        res.accountId = 101;
+        res.currentMode = paylock::LockMode::SHARED;
+        res.holders.insert(1);
+        res.holders.insert(2);
+        res.waitQueue.emplace_back(3, 101, paylock::LockMode::EXCLUSIVE, paylock::LockState::WAITING);
+
+        paylock::LockTableSnapshot snapshot;
+        snapshot.resources[101] = res;
+
+        paylock::DeadlockDetector detector;
+        auto wfg = detector.buildWaitForGraph(snapshot);
+        // T3 must point to BOTH T1 and T2
+        assert(wfg.hasEdge(3, 1));
+        assert(wfg.hasEdge(3, 2));
+        assert(wfg.edgeCount() == 2);
+    }
+    std::cout << "PASSED (Waiting exclusive request branches to ALL shared owners T1, T2)\n";
+
+    // Test 48: Correct Dependencies for Exclusive Locks (Requirement 13)
+    std::cout << "Test 48: [Step 5 Requirement 13] Exclusive lock dependency generation... ";
+    {
+        // T1 holds EXCLUSIVE on A101; T2 requests SHARED
+        paylock::ResourceSnapshot res;
+        res.accountId = 101;
+        res.currentMode = paylock::LockMode::EXCLUSIVE;
+        res.holders.insert(1);
+        res.waitQueue.emplace_back(2, 101, paylock::LockMode::SHARED, paylock::LockState::WAITING);
+
+        paylock::LockTableSnapshot snapshot;
+        snapshot.resources[101] = res;
+
+        paylock::DeadlockDetector detector;
+        auto wfg = detector.buildWaitForGraph(snapshot);
+        assert(wfg.hasEdge(2, 1));
+        assert(!wfg.hasEdge(1, 2));
+        assert(wfg.edgeCount() == 1);
+    }
+    std::cout << "PASSED (Conflicting reader points exclusively to current writer)\n";
+
+    // Test 49: Live Detection While Transactions Are Actively Waiting (Requirement 14)
+    std::cout << "Test 49: [Step 5 Requirement 14] Live concurrent deadlock detection while threads wait... ";
+    {
+        paylock::LockManager lm;
+        const int a1 = 101, a2 = 102;
+        assert(lm.acquireLock(1001, a1, paylock::LockMode::EXCLUSIVE));
+        assert(lm.acquireLock(1002, a2, paylock::LockMode::EXCLUSIVE));
+
+        std::atomic<bool> t1Acquired{false};
+        std::atomic<bool> t2Acquired{false};
+
+        std::thread th1([&]() {
+            if (lm.acquireLock(1001, a2, paylock::LockMode::EXCLUSIVE)) {
+                t1Acquired.store(true);
+                lm.releaseLock(1001, a2);
+            }
+        });
+
+        while (lm.getWaitingRequests(a2).empty()) {
+            std::this_thread::yield();
+        }
+
+        std::thread th2([&]() {
+            if (lm.acquireLock(1002, a1, paylock::LockMode::EXCLUSIVE)) {
+                t2Acquired.store(true);
+                lm.releaseLock(1002, a1);
+            }
+        });
+
+        while (lm.getWaitingRequests(a1).empty()) {
+            std::this_thread::yield();
+        }
+
+        paylock::DeadlockDetector detector(&lm);
+        auto report = detector.detectDeadlocks();
+
+        assert(report.deadlockDetected);
+        assert(report.cycles.size() == 1);
+        assert((report.cycles[0] == std::vector<int>{1001, 1002, 1001}));
+        assert(report.involvedTransactions.count(1001) && report.involvedTransactions.count(1002));
+
+        // Clean termination without recovery
+        lm.releaseLock(1001, a1);
+        th2.join();
+        lm.releaseLock(1002, a2);
+        th1.join();
+
+        lm.releaseAllLocks(1001);
+        lm.releaseAllLocks(1002);
+    }
+    std::cout << "PASSED (Live waiting threads detected in deadlock cycle T1001 -> T1002 -> T1001)\n";
+
+    // Test 50: Detection Does Not Perform Recovery (Requirement 15)
+    std::cout << "Test 50: [Step 5 Requirement 15] Verification that detection performs ZERO recovery... ";
+    {
+        paylock::LockManager lm;
+        assert(lm.acquireLock(1, 101, paylock::LockMode::EXCLUSIVE));
+        assert(lm.acquireLock(2, 102, paylock::LockMode::EXCLUSIVE));
+
+        std::thread th1([&]() {
+            lm.acquireLock(1, 102, paylock::LockMode::EXCLUSIVE);
+            lm.releaseAllLocks(1);
+        });
+
+        while (lm.getWaitingRequests(102).empty()) {
+            std::this_thread::yield();
+        }
+
+        std::thread th2([&]() {
+            lm.acquireLock(2, 101, paylock::LockMode::EXCLUSIVE);
+            lm.releaseAllLocks(2);
+        });
+
+        while (lm.getWaitingRequests(101).empty()) {
+            std::this_thread::yield();
+        }
+
+        // Run detector
+        paylock::DeadlockDetector detector(&lm);
+        auto report = detector.detectDeadlocks();
+        assert(report.deadlockDetected);
+
+        // Verify detection did NOT release locks or abort transactions
+        assert(lm.isAccountLocked(101));
+        assert(lm.isAccountLocked(102));
+        assert(!lm.getWaitingRequests(101).empty());
+        assert(!lm.getWaitingRequests(102).empty());
+
+        // Safe manual test cleanup
+        lm.releaseLock(1, 101);
+        th2.join();
+        lm.releaseLock(2, 102);
+        th1.join();
+    }
+    std::cout << "PASSED (Lock table state untouched; no victims selected or aborted)\n";
+
+    // Test 51: Clean Termination of Controlled Deadlock Demonstration (Requirement 16)
+    std::cout << "Test 51: [Step 5 Requirement 16] Controlled Deadlock Demonstration Fixture... ";
+    {
+        paylock::LockManager lm;
+        auto demoReport = paylock::DeadlockDetector::demonstrateControlledDeadlock(lm);
+        assert(demoReport.deadlockDetected);
+        assert(demoReport.cycles.size() == 1);
+        assert((demoReport.cycles[0] == std::vector<int>{1, 2, 1}));
+        assert(demoReport.involvedTransactions.count(1) && demoReport.involvedTransactions.count(2));
+
+        // Verify both accounts are completely unlocked after demonstration finishes
+        assert(!lm.isAccountLocked(101));
+        assert(!lm.isAccountLocked(102));
+    }
+    std::cout << "PASSED (Repeatable demo completed deterministically without hanging)\n";
+
+    std::cout << "\n[ALL 51 UNIT, ACID, CONCURRENCY, LOCK MANAGER & DEADLOCK DETECTION TESTS PASSED SUCCESSFULLY!]\n";
 }
 
 int main() {

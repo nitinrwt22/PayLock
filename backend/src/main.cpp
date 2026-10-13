@@ -80,6 +80,15 @@ void runControlledConcurrencyDemo(paylock::DatabaseManager& adminDb, const paylo
     std::cout << "----------------------------------------\n\n";
 }
 
+void runControlledDeadlockDemo() {
+    std::cout << "\n----------------------------------------\n";
+    std::cout << "     PAYLOCK DEADLOCK DETECTION DEMO    \n";
+    std::cout << "----------------------------------------\n\n";
+    paylock::LockManager lm;
+    auto report = paylock::DeadlockDetector::demonstrateControlledDeadlock(lm);
+    std::cout << report.toString() << "\n";
+}
+
 void runAutomatedWalkthrough(paylock::DatabaseManager& adminDb, const paylock::DatabaseConfig& config) {
     std::cout << "\n==================================================\n";
     std::cout << "      PAYLOCK COMPLETE AUTOMATED SHOWCASE         \n";
@@ -122,11 +131,14 @@ void runAutomatedWalkthrough(paylock::DatabaseManager& adminDb, const paylock::D
     std::cout << "\n[Step 9] Controlled Concurrency Demo (Multi-Worker Execution):\n";
     runControlledConcurrencyDemo(adminDb, config);
 
+    std::cout << "\n[Step 10] Controlled Deadlock Detection Showcase (Step 5 WFG & Cycle Detection):\n";
+    runControlledDeadlockDemo();
+
     std::cout << "\n==================================================\n";
     std::cout << "           OS + DBMS INTEGRATION SUMMARY          \n";
     std::cout << "==================================================\n";
-    std::cout << "[OS Concepts]   : std::thread, std::mutex critical sections, worker state tracking.\n";
-    std::cout << "[DBMS Concepts] : START TRANSACTION, COMMIT, ROLLBACK, ACID atomicity, WAL logs.\n";
+    std::cout << "[OS Concepts]   : std::thread, std::mutex, condition variables, WFG cycle detection.\n";
+    std::cout << "[DBMS Concepts] : ACID atomicity, WAL logs, 2PL lock table, deadlock handling.\n";
     std::cout << "==================================================\n\n";
 }
 
@@ -146,11 +158,12 @@ void runInteractiveCLI(paylock::DatabaseManager& adminDb, const paylock::Databas
         std::cout << " 6. Controlled Rollback Demo (Atomicity)\n";
         std::cout << " 7. Controlled Concurrency Demo (Step 17)\n";
         std::cout << " 8. Shared Counter Race Condition Demo\n";
-        std::cout << " 9. Run Full Automated Walkthrough\n";
-        std::cout << "10. Reset Database to Seed State\n";
-        std::cout << "11. Exit\n";
+        std::cout << " 9. Controlled Deadlock Detection Demo (Step 5)\n";
+        std::cout << "10. Run Full Automated Walkthrough\n";
+        std::cout << "11. Reset Database to Seed State\n";
+        std::cout << "12. Exit\n";
         std::cout << "----------------------------------------\n";
-        std::cout << "Enter choice [1-11]: ";
+        std::cout << "Enter choice [1-12]: ";
 
         int choice = 0;
         if (!(std::cin >> choice)) {
@@ -222,21 +235,25 @@ void runInteractiveCLI(paylock::DatabaseManager& adminDb, const paylock::Databas
                 break;
             }
             case 9: {
-                runAutomatedWalkthrough(adminDb, config);
+                runControlledDeadlockDemo();
                 break;
             }
             case 10: {
+                runAutomatedWalkthrough(adminDb, config);
+                break;
+            }
+            case 11: {
                 resetDatabaseState(adminDb);
                 std::cout << "[System]: Database accounts and transactions reset to clean seed state.\n";
                 txManager.displayAccounts();
                 break;
             }
-            case 11: {
+            case 12: {
                 std::cout << "Exiting PayLock. Goodbye!\n";
                 return;
             }
             default: {
-                std::cout << "Invalid choice. Please enter a number between 1 and 11.\n";
+                std::cout << "Invalid choice. Please enter a number between 1 and 12.\n";
                 break;
             }
         }

@@ -289,6 +289,8 @@ bool LockManager::upgradeLock(int transactionId, int accountId, int timeoutMs) {
     }
 
     // Other transactions also hold SHARED lock: must wait until all other holders release
+    entry.waitQueue.emplace_back(transactionId, accountId, LockMode::EXCLUSIVE, LockState::WAITING);
+
     auto pred = [this, transactionId, accountId]() {
         auto it = lockTable_.find(accountId);
         if (it == lockTable_.end()) return false;
@@ -304,8 +306,15 @@ bool LockManager::upgradeLock(int transactionId, int accountId, int timeoutMs) {
         upgraded = true;
     }
 
+    // Remove upgrade request from wait queue
+    auto& entryRef = lockTable_[accountId];
+    auto qIt = std::find_if(entryRef.waitQueue.begin(), entryRef.waitQueue.end(),
+        [transactionId](const LockRequest& r) { return r.transactionId == transactionId; });
+    if (qIt != entryRef.waitQueue.end()) {
+        entryRef.waitQueue.erase(qIt);
+    }
+
     if (upgraded) {
-        auto& entryRef = lockTable_[accountId];
         entryRef.currentMode = LockMode::EXCLUSIVE;
         transactionHoldings_[transactionId][accountId] = LockMode::EXCLUSIVE;
         Logger::info("[LOCK] T" + std::to_string(transactionId) + " upgraded SHARED -> EXCLUSIVE on " + formatResource(accountId), "LockManager");
@@ -431,6 +440,27 @@ void LockManager::displayLockTable() const {
                   << waitSs.str() << "\n";
     }
     std::cout << "=================================================================\n\n";
+}
+
+LockTableSnapshot LockManager::getSnapshot() const {
+    std::lock_guard<std::mutex> lock(tableMutex_);
+    LockTableSnapshot snapshot;
+    snapshot.snapshotTime = std::chrono::system_clock::now();
+    snapshot.transactionHoldings = transactionHoldings_;
+
+    for (const auto& kv : lockTable_) {
+        const auto& entry = kv.second;
+        // Include entries that currently have active holders or waiters
+        if (!entry.holders.empty() || !entry.waitQueue.empty()) {
+            ResourceSnapshot res;
+            res.accountId = entry.accountId;
+            res.currentMode = entry.currentMode;
+            res.holders = entry.holders;
+            res.waitQueue = entry.waitQueue;
+            snapshot.resources[entry.accountId] = std::move(res);
+        }
+    }
+    return snapshot;
 }
 
 } // namespace paylock

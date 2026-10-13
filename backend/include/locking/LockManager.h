@@ -66,6 +66,27 @@ struct ResourceLockEntry {
 };
 
 /**
+ * @brief Point-in-time snapshot of an individual resource in the Lock Table.
+ */
+struct ResourceSnapshot {
+    int accountId{0};
+    std::optional<LockMode> currentMode{std::nullopt};
+    std::unordered_set<int> holders;
+    std::vector<LockRequest> waitQueue;
+};
+
+/**
+ * @brief Point-in-time consistent snapshot of the entire Lock Table and Transaction Holdings.
+ */
+struct LockTableSnapshot {
+    std::unordered_map<int, ResourceSnapshot> resources;
+    std::unordered_map<int, std::unordered_map<int, LockMode>> transactionHoldings;
+    std::chrono::system_clock::time_point snapshotTime;
+};
+
+class DeadlockDetector;
+
+/**
  * @brief LockManager provides fine-grained, account-level concurrency control
  * between transactions, supporting 2-Phase Locking (2PL), Shared/Exclusive locks,
  * wait queues with condition variables, lock upgrades, and lock monitoring.
@@ -119,11 +140,20 @@ public:
     // Monitoring & Display
     void displayLockTable() const;
 
+    // Snapshot interface for Wait-For Graph (WFG) & Deadlock Detection
+    LockTableSnapshot getSnapshot() const;
+
+    // DeadlockDetector association
+    void setDeadlockDetector(DeadlockDetector* detector) noexcept { deadlockDetector_ = detector; }
+    DeadlockDetector* getDeadlockDetector() const noexcept { return deadlockDetector_; }
+
 private:
     bool canGrantImmediately(int transactionId, int accountId, LockMode requestedMode) const;
 
     mutable std::mutex tableMutex_; // Mutex protecting the internal Lock Table
     std::condition_variable lockCv_; // Condition variable for waking waiting transactions
+
+    DeadlockDetector* deadlockDetector_{nullptr};
 
     // accountId -> ResourceLockEntry
     std::unordered_map<int, ResourceLockEntry> lockTable_;

@@ -158,7 +158,7 @@ PayLock/
 | **Logger** | Centralized thread-safe console & structured event logging | **[BUILT]** |
 | **ConcurrencyManager** | Facade for thread execution, worker scheduling & contention control | **[BUILT]** |
 | **LockManager** | Shared (S) and Exclusive (X) 2-Phase Locking, FIFO wait queues, lock upgrades | **[BUILT]** |
-| **DeadlockDetector** | Wait-For Graph (WFG) cycle detection interface and DFS stub | **[IN PROGRESS / STUBBED]** |
+| **DeadlockDetector** | Wait-For Graph (WFG) snapshot synthesis, directed cycle detection (3-Color DFS), DeadlockReport generation | **[BUILT]** |
 | **RecoveryManager** | Deadlock victim selection policies and transaction rollback stub | **[IN PROGRESS / STUBBED]** |
 | **ResourceManager** | Virtual address to page translation and resource allocation stub | **[IN PROGRESS / STUBBED]** |
 | **Frontend Prototype** | Interactive web dashboard visualizing balances, threads, and logs | **[BUILT (Prototype)]** |
@@ -272,6 +272,28 @@ PayLock's **Lock Manager** (`paylock::LockManager`) provides granular applicatio
 
 ---
 
+## Deadlock Detection (Step 5)
+
+PayLock's **Deadlock Detector** (`paylock::DeadlockDetector`) identifies the Coffman **Circular Wait** condition using directed graph analysis:
+
+### 1. Wait-For Graph (WFG) Construction
+- **Vertices**: Active transactions currently executing or waiting.
+- **Directed Edges**: An edge $T_1 \rightarrow T_2$ signifies that transaction $T_1$ is blocked waiting for a lock held by transaction $T_2$.
+- **Snapshot Isolation**: Extracted under atomic mutex protection (`LockManager::getSnapshot()`) so graph operations never block running transactions.
+- **Dependency Multi-Branching**: If an exclusive request waits on an account held by multiple shared-lock holders, edges are created to every conflicting owner.
+
+### 2. Cycle Detection via 3-Color DFS
+- Implements Depth-First Search with **WHITE (0, unvisited)**, **GRAY (1, in-stack)**, and **BLACK (2, processed)** states.
+- Back-edges to GRAY vertices indicate directed cycles, extracted as closed paths ($T_1 \rightarrow T_2 \rightarrow T_1$).
+- **Cycle Canonicalization**: Cycles are normalized to start from the minimum transaction ID while preserving directed edge order, eliminating duplicate cycle reports.
+- **Time Complexity**: Optimal $O(V + E)$ time and space complexity.
+
+### 3. Safe Controlled Demonstration
+- Deterministically orchestrates two concurrent transactions ($T_1$ and $T_2$) competing across accounts `A101` and `A102` without arbitrary sleeps.
+- Safely terminates by coordinated unlocking without performing premature transaction recovery.
+
+---
+
 ## Database Setup
 
 ### 1. Execute SQL Scripts
@@ -335,7 +357,7 @@ The demonstration runs:
 # Or via make:
 make test
 ```
-Executes all 35 unit, integration, ACID, concurrency, architecture, and Lock Manager tests.
+Executes all 51 unit, integration, ACID, concurrency, architecture, Lock Manager, and Deadlock Detection tests.
 
 ### 3. Open the Frontend Dashboard
 ```bash
@@ -351,7 +373,7 @@ python3 -m http.server 8080 --directory frontend
 ## Future Modules
 In upcoming phases, the remaining advanced modules will be populated with full implementations:
 - **Lock Manager**: **[COMPLETED IN STEP 4]** Granular row-level 2-Phase Locking (2PL), shared read locks, exclusive write locks, FIFO wait queues, lock upgrades.
-- **Deadlock Detection (Step 5)**: Periodic Wait-For Graph (WFG) cycle detection using DFS cycle discovery.
+- **Deadlock Detection**: **[COMPLETED IN STEP 5]** Wait-For Graph (WFG) snapshot synthesis, 3-color DFS directed cycle detection, DeadlockReport generation, controlled demonstration.
 - **Deadlock Recovery (Step 6)**: Automated victim selection (Youngest Transaction, Lowest Cost, Fewest Locks), transaction abort, lock release, and automatic client retry.
 - **Resource Management**: Operating systems paging simulation, memory frame allocation algorithms (FIFO, LRU), and resource request/allocation matrices.
 - **REST API Layer**: Embedded C++ HTTP server bridging the C++ backend to the web dashboard via standard JSON endpoints (`GET /api/accounts`, `POST /api/transfer`, `GET /api/deadlocks`).
