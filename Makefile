@@ -13,7 +13,8 @@ CORE_SRC = backend/src/logging/Logger.cpp \
            backend/src/locking/LockManager.cpp \
            backend/src/deadlock/DeadlockDetector.cpp \
            backend/src/recovery/RecoveryManager.cpp \
-           backend/src/resources/ResourceManager.cpp
+           backend/src/resources/ResourceManager.cpp \
+           backend/src/resources/PagingSimulator.cpp
 
 MAIN_SRC = backend/src/main.cpp $(CORE_SRC)
 TEST_SRC = tests/test_db.cpp $(CORE_SRC)

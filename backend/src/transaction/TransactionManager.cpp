@@ -167,6 +167,10 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
             "Credited ₹" + formatAmount(amount) + " to Account " + std::to_string(receiverAccountId));
 
         // Step 6e: Mark transaction as COMMITTED
+        if (isAbortRequested(logicalTxId) || isAbortRequested(txId)) {
+            throw DatabaseException("Transaction aborted by deadlock recovery before commit.");
+        }
+
         db_.updateTransactionStatus(txId, "COMMITTED");
         db_.recordTransactionLog(txId, "TRANSACTION_COMMITTED",
             "Transfer completed and permanently committed to MySQL.");
@@ -174,6 +178,11 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
 
         // Step 6f: Commit MySQL transaction (Durability)
         db_.commit();
+        {
+            std::lock_guard<std::mutex> lock(abortMutex_);
+            committedTransactions_.insert(logicalTxId);
+            committedTransactions_.insert(txId);
+        }
         return true;
 
     } catch (const std::exception& ex) {
@@ -251,12 +260,21 @@ bool TransactionManager::deposit(int accountId, double amount) {
         db_.recordTransactionLog(txId, "RECEIVER_BALANCE_CREDITED",
             "Credited ₹" + formatAmount(amount) + " to Account " + std::to_string(accountId));
 
+        if (isAbortRequested(logicalTxId) || isAbortRequested(txId)) {
+            throw DatabaseException("Deposit aborted by deadlock recovery before commit.");
+        }
+
         db_.updateTransactionStatus(txId, "COMMITTED");
         db_.recordTransactionLog(txId, "TRANSACTION_COMMITTED",
             "Deposit committed successfully.");
         Logger::info("Deposit transaction T" + std::to_string(txId) + " committed [State: COMMITTED]", "TransactionManager");
 
         db_.commit();
+        {
+            std::lock_guard<std::mutex> lock(abortMutex_);
+            committedTransactions_.insert(logicalTxId);
+            committedTransactions_.insert(txId);
+        }
         return true;
 
     } catch (const std::exception& ex) {
@@ -352,12 +370,21 @@ bool TransactionManager::withdraw(int accountId, double amount) {
         db_.recordTransactionLog(txId, "SENDER_BALANCE_DEBITED",
             "Debited ₹" + formatAmount(amount) + " from Account " + std::to_string(accountId));
 
+        if (isAbortRequested(logicalTxId) || isAbortRequested(txId)) {
+            throw DatabaseException("Withdrawal aborted by deadlock recovery before commit.");
+        }
+
         db_.updateTransactionStatus(txId, "COMMITTED");
         db_.recordTransactionLog(txId, "TRANSACTION_COMMITTED",
             "Withdrawal committed successfully.");
         Logger::info("Withdrawal transaction T" + std::to_string(txId) + " committed [State: COMMITTED]", "TransactionManager");
 
         db_.commit();
+        {
+            std::lock_guard<std::mutex> lock(abortMutex_);
+            committedTransactions_.insert(logicalTxId);
+            committedTransactions_.insert(txId);
+        }
         return true;
 
     } catch (const std::exception& ex) {
@@ -573,6 +600,66 @@ void TransactionManager::displayTransactionAudit(int transactionId) const {
         }
         std::cout << "\n";
     }
+}
+
+void TransactionManager::requestAbort(int transactionId, const std::string& reason) {
+    std::lock_guard<std::mutex> lock(abortMutex_);
+    abortRequests_[transactionId] = reason;
+    if (lockManager_) {
+        lockManager_->abortWaitingTransaction(transactionId);
+    }
+    Logger::info("Abort requested for Tx #" + std::to_string(transactionId) + " (" + reason + ")", "TransactionManager");
+}
+
+bool TransactionManager::isAbortRequested(int transactionId) const {
+    std::lock_guard<std::mutex> lock(abortMutex_);
+    return abortRequests_.count(transactionId) > 0;
+}
+
+bool TransactionManager::isCommitted(int transactionId) const {
+    std::lock_guard<std::mutex> lock(abortMutex_);
+    if (committedTransactions_.count(transactionId)) {
+        return true;
+    }
+    try {
+        auto tx = db_.getTransactionById(transactionId);
+        if (tx.has_value() && tx->status == "COMMITTED") {
+            committedTransactions_.insert(transactionId);
+            return true;
+        }
+    } catch (...) {}
+    return false;
+}
+
+bool TransactionManager::rollbackTransaction(int transactionId, const std::string& reason) {
+    std::lock_guard<std::mutex> lock(abortMutex_);
+    if (committedTransactions_.count(transactionId)) {
+        Logger::warn("Cannot rollback transaction T" + std::to_string(transactionId) + ": already committed.", "TransactionManager");
+        return false;
+    }
+
+    abortRequests_[transactionId] = reason;
+
+    if (lockManager_) {
+        lockManager_->abortWaitingTransaction(transactionId);
+    }
+
+    try {
+        auto optTx = db_.getTransactionById(transactionId);
+        if (optTx.has_value()) {
+            if (optTx->status == "COMMITTED") {
+                committedTransactions_.insert(transactionId);
+                return false;
+            }
+            db_.updateTransactionStatus(transactionId, "ROLLED_BACK");
+            db_.recordTransactionLog(transactionId, "DEADLOCK_ABORTED", reason);
+            Logger::info("Database rollback completed for T" + std::to_string(transactionId), "TransactionManager");
+        }
+    } catch (const std::exception& ex) {
+        Logger::warn("Database update during rollback: " + std::string(ex.what()), "TransactionManager");
+    }
+
+    return true;
 }
 
 } // namespace paylock

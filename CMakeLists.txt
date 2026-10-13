@@ -63,6 +63,7 @@ set(PAYLOCK_CORE_SOURCES
     backend/src/deadlock/DeadlockDetector.cpp
     backend/src/recovery/RecoveryManager.cpp
     backend/src/resources/ResourceManager.cpp
+    backend/src/resources/PagingSimulator.cpp
 )
 
 # Main Executable

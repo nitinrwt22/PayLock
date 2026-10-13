@@ -159,8 +159,8 @@ PayLock/
 | **ConcurrencyManager** | Facade for thread execution, worker scheduling & contention control | **[BUILT]** |
 | **LockManager** | Shared (S) and Exclusive (X) 2-Phase Locking, FIFO wait queues, lock upgrades | **[BUILT]** |
 | **DeadlockDetector** | Wait-For Graph (WFG) snapshot synthesis, directed cycle detection (3-Color DFS), DeadlockReport generation | **[BUILT]** |
-| **RecoveryManager** | Deadlock victim selection policies and transaction rollback stub | **[IN PROGRESS / STUBBED]** |
-| **ResourceManager** | Virtual address to page translation and resource allocation stub | **[IN PROGRESS / STUBBED]** |
+| **RecoveryManager** | Deadlock victim selection policies, cooperative thread abort, MySQL rollback, lock release & waiter resumption | **[BUILT]** |
+| **ResourceManager** | Logical resource quotas, admission control, virtual address translation, and LRU paging simulator | **[BUILT]** |
 | **Frontend Prototype** | Interactive web dashboard visualizing balances, threads, and logs | **[BUILT (Prototype)]** |
 | **REST API Layer** | Embedded HTTP server exposing `/api/transactions` and `/api/locks` | **[PLANNED]** |
 
@@ -294,6 +294,53 @@ PayLock's **Deadlock Detector** (`paylock::DeadlockDetector`) identifies the Cof
 
 ---
 
+## Deadlock Recovery (Step 6)
+
+PayLock's **Deadlock Recovery Engine** (`paylock::RecoveryManager`) resolves detected deadlocks safely and cooperatively:
+
+### 1. Deterministic Victim Selection Policies
+- **`YOUNGEST_TRANSACTION` (Default)**: Selects the transaction with the highest Transaction ID within the cycle (least invested work, lowest rollback cost).
+- **`FEWEST_LOCKS_HELD`**: Selects the transaction holding the smallest number of locks.
+- **`LOWEST_RECOVERY_PRIORITY` / `HIGHEST_TRANSACTION_ID`**: Selects deterministically using real tracked metrics.
+- **Cycle Membership Guarantee**: The victim is strictly chosen from unique members of the detected circular cycle.
+
+### 2. Cooperative Thread Abort
+- **Zero Forceful Termination**: No `std::terminate()`, thread cancellation, or abrupt process exits.
+- **Cooperative Cancellation**: Sets abort flag in `TransactionManager` which is checked prior to payment commit points.
+- **Wait Queue Interruption**: `LockManager::abortWaitingTransaction()` signals `lockCv_`, allowing threads blocked in lock acquisition to wake up, remove their wait requests, and safely unwind their call stack.
+
+### 3. MySQL Rollback & Balance Consistency
+- **Active Rollback**: Rolls back uncommitted database modifications on the owning transaction's connection.
+- **Conservation of Balances**: Mathematical verification guarantees total balance before deadlock equals total balance after recovery ($\sum B_{\text{initial}} = \sum B_{\text{final}}$).
+- **State Transition**: Updates transaction status to `ROLLED_BACK` and appends `DEADLOCK_ABORTED` audit events in `transaction_logs`.
+- **Committed Race Handling**: If a transaction committed before abort processing, it is safely skipped without corrupting committed state.
+
+### 4. Lock Release & Waiter Resumption
+- Releases only locks owned by the victim (`releaseAllLocks()`).
+- Surviving transactions' locks remain intact.
+- Wakes queued waiting transactions via `std::condition_variable` broadcast.
+- The surviving transaction acquires the contested lock and progresses to successful completion.
+
+---
+
+## Resource Management & Paging Simulation (Step 7)
+
+PayLock's **Resource Manager & Paging Engine** (`paylock::ResourceManager` & `paylock::PagingSimulator`) bridges OS capacity planning and memory abstractions:
+
+### 1. Logical Resource Management (`ResourceManager`)
+- **Capacity Admission Control**: Tracks system-wide capacities for `ACCOUNT_RECORDS` (1,000 slots), `TRANSACTION_SLOTS` (64 slots), `WORKER_CAPACITY` (16 permits), and `MEMORY_FRAMES` (64 frames).
+- **Separation of Concerns**: Strictly separates quantitative capacity quotas from qualitative database-style locks (`LockManager`).
+- **Invariant Enforcement**: Guarantees $\text{Total} = \text{Allocated} + \text{Available}$ across all mutations, preventing counter underflow or negative capacities.
+- **Per-Owner Reclaim**: `releaseAllForOwner(ownerId)` atomically releases all held units when a transaction unwinds or commits.
+
+### 2. Educational Paging Simulation (`PagingSimulator`)
+- **Virtual Memory Abstraction**: Models virtual pages, physical frames, page tables, page faults, and page hits.
+- **LRU Page Replacement (`LRUReplacementPolicy`)**: Implements Least Recently Used replacement with logical access timestamps, evicting the oldest referenced page when frames are exhausted.
+- **Validated Against Standard OS Benchmarks**: Verifies the canonical Silberschatz sequence (20 references on 3 frames: 8 hits [40%], 12 faults [60%], 9 replacements).
+- **Zero Payment Contamination**: Operates as a purely educational simulation without affecting MySQL InnoDB buffer pools, transaction correctness, or ACID durability.
+
+---
+
 ## Database Setup
 
 ### 1. Execute SQL Scripts
@@ -349,7 +396,10 @@ The demonstration runs:
 - Day 1: Foundational database connectivity & schema verification
 - Day 2: ACID transactions, peer-to-peer transfers, deposits, withdrawals, and rollback handling
 - Day 3: Multithreaded concurrent execution, mutex synchronization, and in-memory race condition benchmarks
-- Subsystem Telemetry: Architectural subsystem verification (Logger, LockManager, DeadlockDetector, RecoveryManager, ResourceManager)
+- Day 4: Granular row-level 2-Phase Locking (2PL), shared read locks, exclusive write locks
+- Day 5: Wait-For Graph (WFG) analysis and 3-color DFS deadlock cycle detection
+- Day 6: Deterministic victim selection, safe cooperative abort, MySQL rollback, lock release, and waiter resumption
+- Day 7: Logical resource capacity limits, admission control, and deterministic LRU memory paging simulation
 
 ### 2. Run the Automated Test Suite
 ```bash
@@ -357,7 +407,7 @@ The demonstration runs:
 # Or via make:
 make test
 ```
-Executes all 51 unit, integration, ACID, concurrency, architecture, Lock Manager, and Deadlock Detection tests.
+Executes all 89 unit, integration, ACID, concurrency, architecture, Lock Manager, Deadlock Detection, Deadlock Recovery, and Paging tests.
 
 ### 3. Open the Frontend Dashboard
 ```bash
@@ -374,7 +424,7 @@ python3 -m http.server 8080 --directory frontend
 In upcoming phases, the remaining advanced modules will be populated with full implementations:
 - **Lock Manager**: **[COMPLETED IN STEP 4]** Granular row-level 2-Phase Locking (2PL), shared read locks, exclusive write locks, FIFO wait queues, lock upgrades.
 - **Deadlock Detection**: **[COMPLETED IN STEP 5]** Wait-For Graph (WFG) snapshot synthesis, 3-color DFS directed cycle detection, DeadlockReport generation, controlled demonstration.
-- **Deadlock Recovery (Step 6)**: Automated victim selection (Youngest Transaction, Lowest Cost, Fewest Locks), transaction abort, lock release, and automatic client retry.
-- **Resource Management**: Operating systems paging simulation, memory frame allocation algorithms (FIFO, LRU), and resource request/allocation matrices.
+- **Deadlock Recovery**: **[COMPLETED IN STEP 6]** Deterministic victim selection (Youngest Transaction, Lowest Cost, Fewest Locks), cooperative abort, MySQL rollback, lock release, and waiter resumption.
+- **Resource Management & Paging**: **[COMPLETED IN STEP 7]** Logical capacity tracking, admission control quotas, virtual address translation, and deterministic LRU page replacement simulation.
 - **REST API Layer**: Embedded C++ HTTP server bridging the C++ backend to the web dashboard via standard JSON endpoints (`GET /api/accounts`, `POST /api/transfer`, `GET /api/deadlocks`).
 - **Frontend Integration**: Full live bi-directional dashboard synchronization with real-time WebSocket or Server-Sent Events (SSE) telemetry.

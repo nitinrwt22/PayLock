@@ -7,6 +7,7 @@
 #include "deadlock/DeadlockDetector.h"
 #include "recovery/RecoveryManager.h"
 #include "resources/ResourceManager.h"
+#include "resources/PagingSimulator.h"
 #include <iostream>
 #include <iomanip>
 #include <cassert>
@@ -89,6 +90,23 @@ void runControlledDeadlockDemo() {
     std::cout << report.toString() << "\n";
 }
 
+void runControlledDeadlockRecoveryDemo(paylock::DatabaseManager* db) {
+    std::cout << "\n----------------------------------------\n";
+    std::cout << "     PAYLOCK DEADLOCK RECOVERY DEMO     \n";
+    std::cout << "----------------------------------------\n\n";
+    paylock::LockManager lm;
+    auto result = paylock::RecoveryManager::demonstrateControlledDeadlockRecovery(lm, db);
+    std::cout << result.toString() << "\n";
+}
+
+void runControlledResourceDemo() {
+    paylock::ResourceManager::demonstrateResourceManagement();
+}
+
+void runControlledPagingDemo() {
+    paylock::PagingSimulator::demonstrateLRUPaging();
+}
+
 void runAutomatedWalkthrough(paylock::DatabaseManager& adminDb, const paylock::DatabaseConfig& config) {
     std::cout << "\n==================================================\n";
     std::cout << "      PAYLOCK COMPLETE AUTOMATED SHOWCASE         \n";
@@ -134,11 +152,20 @@ void runAutomatedWalkthrough(paylock::DatabaseManager& adminDb, const paylock::D
     std::cout << "\n[Step 10] Controlled Deadlock Detection Showcase (Step 5 WFG & Cycle Detection):\n";
     runControlledDeadlockDemo();
 
+    std::cout << "\n[Step 11] Controlled Deadlock Recovery Showcase (Step 6 Victim Abort & Waiter Resumption):\n";
+    runControlledDeadlockRecoveryDemo(&adminDb);
+
+    std::cout << "\n[Step 12] Controlled Resource Management Showcase (Step 7 Capacity & Admission Control):\n";
+    runControlledResourceDemo();
+
+    std::cout << "\n[Step 13] Controlled OS Paging Simulation Showcase (Step 7 LRU Replacement & Page Faults):\n";
+    runControlledPagingDemo();
+
     std::cout << "\n==================================================\n";
     std::cout << "           OS + DBMS INTEGRATION SUMMARY          \n";
     std::cout << "==================================================\n";
-    std::cout << "[OS Concepts]   : std::thread, std::mutex, condition variables, WFG cycle detection.\n";
-    std::cout << "[DBMS Concepts] : ACID atomicity, WAL logs, 2PL lock table, deadlock handling.\n";
+    std::cout << "[OS Concepts]   : std::thread, std::mutex, condition variables, WFG cycle detection, cooperative abort, paging & LRU.\n";
+    std::cout << "[DBMS Concepts] : ACID atomicity, WAL logs, 2PL lock table, deadlock handling & rollback, resource management.\n";
     std::cout << "==================================================\n\n";
 }
 
@@ -159,11 +186,14 @@ void runInteractiveCLI(paylock::DatabaseManager& adminDb, const paylock::Databas
         std::cout << " 7. Controlled Concurrency Demo (Step 17)\n";
         std::cout << " 8. Shared Counter Race Condition Demo\n";
         std::cout << " 9. Controlled Deadlock Detection Demo (Step 5)\n";
-        std::cout << "10. Run Full Automated Walkthrough\n";
-        std::cout << "11. Reset Database to Seed State\n";
-        std::cout << "12. Exit\n";
+        std::cout << "10. Controlled Deadlock Recovery Demo (Step 6)\n";
+        std::cout << "11. Controlled Resource Management Demo (Step 7)\n";
+        std::cout << "12. Controlled LRU Paging Simulation Demo (Step 7)\n";
+        std::cout << "13. Run Full Automated Walkthrough\n";
+        std::cout << "14. Reset Database to Seed State\n";
+        std::cout << "15. Exit\n";
         std::cout << "----------------------------------------\n";
-        std::cout << "Enter choice [1-12]: ";
+        std::cout << "Enter choice [1-15]: ";
 
         int choice = 0;
         if (!(std::cin >> choice)) {
@@ -239,21 +269,33 @@ void runInteractiveCLI(paylock::DatabaseManager& adminDb, const paylock::Databas
                 break;
             }
             case 10: {
-                runAutomatedWalkthrough(adminDb, config);
+                runControlledDeadlockRecoveryDemo(&adminDb);
                 break;
             }
             case 11: {
+                runControlledResourceDemo();
+                break;
+            }
+            case 12: {
+                runControlledPagingDemo();
+                break;
+            }
+            case 13: {
+                runAutomatedWalkthrough(adminDb, config);
+                break;
+            }
+            case 14: {
                 resetDatabaseState(adminDb);
                 std::cout << "[System]: Database accounts and transactions reset to clean seed state.\n";
                 txManager.displayAccounts();
                 break;
             }
-            case 12: {
+            case 15: {
                 std::cout << "Exiting PayLock. Goodbye!\n";
                 return;
             }
             default: {
-                std::cout << "Invalid choice. Please enter a number between 1 and 12.\n";
+                std::cout << "Invalid choice. Please enter a number between 1 and 15.\n";
                 break;
             }
         }

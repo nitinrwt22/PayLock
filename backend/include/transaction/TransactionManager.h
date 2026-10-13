@@ -9,6 +9,9 @@
 #include <vector>
 #include <optional>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <mutex>
 
 namespace paylock {
 
@@ -67,10 +70,20 @@ public:
     // Diagnostics
     std::string getLastError() const;
 
+    // Deadlock Abort & Recovery Interfaces (Step 6)
+    void requestAbort(int transactionId, const std::string& reason = "Deadlock recovery");
+    bool isAbortRequested(int transactionId) const;
+    bool isCommitted(int transactionId) const;
+    bool rollbackTransaction(int transactionId, const std::string& reason = "Deadlock recovery");
+
 private:
     DatabaseManager& db_;
     LockManager* lockManager_{nullptr};
     mutable std::string lastError_;
+
+    mutable std::mutex abortMutex_;
+    std::unordered_map<int, std::string> abortRequests_;
+    mutable std::unordered_set<int> committedTransactions_;
 
     void setLastError(const std::string& err) const;
     static int64_t toCents(double amount);

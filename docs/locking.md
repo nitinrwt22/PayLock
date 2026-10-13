@@ -139,15 +139,26 @@ The Lock Manager itself is concurrently invoked by multiple worker threads:
 
 ---
 
-## 13. Current Limitations & Why Deadlock Detection is Excluded
-In accordance with Step 4 specifications:
-- **No Wait-For Graph (WFG)**: Dynamic cycle detection is intentionally not implemented in this step.
-- **No Victim Selection / Rollback**: If an arbitrary circular wait is constructed outside of deterministic ordering, threads block on `lockCv_` until released or timed out.
-- **Scope Boundary**: Deadlock Detection via Wait-For Graph (WFG) and DFS cycle search is the objective of **Step 5**. Deadlock Recovery and automated victim abort are the objective of **Step 6**.
+---
+
+## 15. Cooperative Abort & Wait-Queue Cancellation (Step 6 Integration)
+
+To support **Step 6 Deadlock Recovery** without thread termination:
+- **`abortWaitingTransaction(int transactionId)`**:
+  - Registers `transactionId` in `abortedTransactions_`.
+  - Broadcasts on `lockCv_.notify_all()`.
+- **Condition Variable Loop Interruption**:
+  - Both `acquireLock()` and `upgradeLock()` check `abortedTransactions_.count(transactionId)` inside their wait loop predicates.
+  - When notified, the blocked victim thread recognizes the abort, erases its pending request from the resource's `waitQueue`, and returns `false`.
+  - This allows worker threads to unwind their stacks cleanly and safely.
+- **Enhanced `releaseAllLocks(int transactionId)`**:
+  - Releases all held locks owned by `transactionId`.
+  - Scans and cleans up any orphan waiting requests from all resource `waitQueue` instances.
+  - Wakes surviving waiting transactions via `lockCv_.notify_all()`.
 
 ---
 
-## 14. Lock Table CLI Monitoring Output
+## 16. Lock Table CLI Monitoring Output
 Below is an example of the real-time Lock Table output produced by `LockManager::displayLockTable()`:
 
 ```text

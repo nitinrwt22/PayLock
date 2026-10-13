@@ -73,6 +73,11 @@ bool LockManager::canGrantImmediately(int transactionId, int accountId, LockMode
 bool LockManager::acquireLock(int transactionId, int accountId, LockMode mode, int timeoutMs) {
     std::unique_lock<std::mutex> lock(tableMutex_);
 
+    if (abortedTransactions_.count(transactionId)) {
+        Logger::warn("[LOCK] T" + std::to_string(transactionId) + " cannot acquire lock: transaction is aborted", "LockManager");
+        return false;
+    }
+
     Logger::info("[LOCK] T" + std::to_string(transactionId) + " requesting " + 
                  lockModeToString(mode) + "(" + formatResource(accountId) + ")", "LockManager");
 
@@ -107,6 +112,9 @@ bool LockManager::acquireLock(int transactionId, int accountId, LockMode mode, i
                  lockModeToString(mode) + "(" + formatResource(accountId) + ")", "LockManager");
 
     auto pred = [this, transactionId, accountId, mode]() {
+        if (abortedTransactions_.count(transactionId)) {
+            return true; // Abort requested: wake up immediately
+        }
         auto it = lockTable_.find(accountId);
         if (it == lockTable_.end()) return false;
         const auto& e = it->second;
@@ -122,6 +130,18 @@ bool LockManager::acquireLock(int transactionId, int accountId, LockMode mode, i
     } else {
         lockCv_.wait(lock, pred);
         acquired = true;
+    }
+
+    // Check if woken due to deadlock abort
+    if (abortedTransactions_.count(transactionId)) {
+        auto& entryRef = lockTable_[accountId];
+        auto qIt = std::find_if(entryRef.waitQueue.begin(), entryRef.waitQueue.end(), 
+            [transactionId](const LockRequest& r) { return r.transactionId == transactionId; });
+        if (qIt != entryRef.waitQueue.end()) {
+            entryRef.waitQueue.erase(qIt);
+        }
+        Logger::warn("[LOCK] T" + std::to_string(transactionId) + " wait cancelled: aborted by deadlock recovery", "LockManager");
+        return false;
     }
 
     if (acquired) {
@@ -162,6 +182,10 @@ bool LockManager::acquireLock(int transactionId, int accountId, LockMode mode, i
 
 bool LockManager::tryAcquireLock(int transactionId, int accountId, LockMode mode) {
     std::lock_guard<std::mutex> lock(tableMutex_);
+
+    if (abortedTransactions_.count(transactionId)) {
+        return false;
+    }
 
     if (!canGrantImmediately(transactionId, accountId, mode)) {
         return false;
@@ -237,35 +261,47 @@ bool LockManager::releaseLock(int transactionId, int accountId) {
 void LockManager::releaseAllLocks(int transactionId) {
     std::unique_lock<std::mutex> lock(tableMutex_);
 
-    auto txIt = transactionHoldings_.find(transactionId);
-    if (txIt == transactionHoldings_.end()) {
-        return;
-    }
-
     Logger::info("[LOCK] Releasing all held locks for Tx #" + std::to_string(transactionId), "LockManager");
 
-    std::vector<int> heldAccounts;
-    for (const auto& kv : txIt->second) {
-        heldAccounts.push_back(kv.first);
-    }
-
-    for (int accId : heldAccounts) {
-        auto it = lockTable_.find(accId);
-        if (it != lockTable_.end()) {
-            it->second.holders.erase(transactionId);
-            if (it->second.holders.empty()) {
-                it->second.currentMode = std::nullopt;
-            }
-            Logger::info("[LOCK] T" + std::to_string(transactionId) + " released lock on " + formatResource(accId), "LockManager");
+    auto txIt = transactionHoldings_.find(transactionId);
+    if (txIt != transactionHoldings_.end()) {
+        std::vector<int> heldAccounts;
+        for (const auto& kv : txIt->second) {
+            heldAccounts.push_back(kv.first);
         }
+
+        for (int accId : heldAccounts) {
+            auto it = lockTable_.find(accId);
+            if (it != lockTable_.end()) {
+                it->second.holders.erase(transactionId);
+                if (it->second.holders.empty()) {
+                    it->second.currentMode = std::nullopt;
+                }
+                Logger::info("[LOCK] T" + std::to_string(transactionId) + " released lock on " + formatResource(accId), "LockManager");
+            }
+        }
+        transactionHoldings_.erase(txIt);
     }
 
-    transactionHoldings_.erase(transactionId);
+    // Clean up any pending waiting requests across all resources
+    for (auto& kv : lockTable_) {
+        auto& waitQ = kv.second.waitQueue;
+        waitQ.erase(
+            std::remove_if(waitQ.begin(), waitQ.end(),
+                [transactionId](const LockRequest& r) { return r.transactionId == transactionId; }),
+            waitQ.end());
+    }
+
     lockCv_.notify_all();
 }
 
 bool LockManager::upgradeLock(int transactionId, int accountId, int timeoutMs) {
     std::unique_lock<std::mutex> lock(tableMutex_);
+
+    if (abortedTransactions_.count(transactionId)) {
+        Logger::warn("[LOCK] Cannot upgrade lock: Tx #" + std::to_string(transactionId) + " is aborted", "LockManager");
+        return false;
+    }
 
     auto it = lockTable_.find(accountId);
     if (it == lockTable_.end() || it->second.holders.find(transactionId) == it->second.holders.end()) {
@@ -292,6 +328,9 @@ bool LockManager::upgradeLock(int transactionId, int accountId, int timeoutMs) {
     entry.waitQueue.emplace_back(transactionId, accountId, LockMode::EXCLUSIVE, LockState::WAITING);
 
     auto pred = [this, transactionId, accountId]() {
+        if (abortedTransactions_.count(transactionId)) {
+            return true; // Aborted
+        }
         auto it = lockTable_.find(accountId);
         if (it == lockTable_.end()) return false;
         const auto& e = it->second;
@@ -312,6 +351,11 @@ bool LockManager::upgradeLock(int transactionId, int accountId, int timeoutMs) {
         [transactionId](const LockRequest& r) { return r.transactionId == transactionId; });
     if (qIt != entryRef.waitQueue.end()) {
         entryRef.waitQueue.erase(qIt);
+    }
+
+    if (abortedTransactions_.count(transactionId)) {
+        Logger::warn("[LOCK] T" + std::to_string(transactionId) + " upgrade cancelled: aborted by deadlock recovery", "LockManager");
+        return false;
     }
 
     if (upgraded) {
@@ -461,6 +505,23 @@ LockTableSnapshot LockManager::getSnapshot() const {
         }
     }
     return snapshot;
+}
+
+void LockManager::abortWaitingTransaction(int transactionId) {
+    std::unique_lock<std::mutex> lock(tableMutex_);
+    abortedTransactions_.insert(transactionId);
+    Logger::info("[LOCK] Registered abort for Tx #" + std::to_string(transactionId) + ", waking waiters", "LockManager");
+    lockCv_.notify_all();
+}
+
+bool LockManager::isTransactionAborted(int transactionId) const {
+    std::lock_guard<std::mutex> lock(tableMutex_);
+    return abortedTransactions_.count(transactionId) > 0;
+}
+
+void LockManager::clearTransactionAbort(int transactionId) {
+    std::lock_guard<std::mutex> lock(tableMutex_);
+    abortedTransactions_.erase(transactionId);
 }
 
 } // namespace paylock

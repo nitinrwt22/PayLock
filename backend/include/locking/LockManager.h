@@ -143,6 +143,11 @@ public:
     // Snapshot interface for Wait-For Graph (WFG) & Deadlock Detection
     LockTableSnapshot getSnapshot() const;
 
+    // Deadlock Abort & Cancellation Operations (Step 6)
+    void abortWaitingTransaction(int transactionId);
+    bool isTransactionAborted(int transactionId) const;
+    void clearTransactionAbort(int transactionId);
+
     // DeadlockDetector association
     void setDeadlockDetector(DeadlockDetector* detector) noexcept { deadlockDetector_ = detector; }
     DeadlockDetector* getDeadlockDetector() const noexcept { return deadlockDetector_; }
@@ -154,6 +159,9 @@ private:
     std::condition_variable lockCv_; // Condition variable for waking waiting transactions
 
     DeadlockDetector* deadlockDetector_{nullptr};
+
+    // Aborted transactions tracking (Step 6)
+    std::unordered_set<int> abortedTransactions_;
 
     // accountId -> ResourceLockEntry
     std::unordered_map<int, ResourceLockEntry> lockTable_;
