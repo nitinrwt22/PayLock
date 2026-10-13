@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"tertiary-container": "#c3abff", "secondary-fixed": "#78fbb6", "on-primary": "#163800", "error-container": "#93000a", "on-tertiary-container": "#571ac0", surface: "#111318", "on-primary-fixed-variant": "#235100", "outline-variant": "#3f4a36", "on-background": "#e2e2e9", "secondary-fixed-dim": "#59de9b", "primary-container": "#64d000", "on-secondary-fixed": "#002111", secondary: "#59de9b", "surface-container-low": "#1a1b21", "tertiary-fixed-dim": "#d0bcff", "tertiary-fixed": "#e9ddff", "surface-container-highest": "#33353a", "surface-container-lowest": "#0c0e13", "surface-variant": "#33353a", "surface-container-high": "#282a2f", "on-surface": "#e2e2e9", "primary-fixed-dim": "#6ce000", "primary-fixed": "#81ff1e", "secondary-container": "#00a669", "inverse-on-surface": "#2e3036", "on-primary-fixed": "#0a2100", "on-tertiary-fixed-variant": "#5516be", "inverse-primary": "#316b00", background: "#111318", "on-secondary": "#003921", error: "#ffb4ab", "surface-dim": "#111318", "surface-container": "#1e1f25", primary: "#74ef00", "surface-tint": "#6ce000", "on-tertiary-fixed": "#23005c", "on-secondary-container": "#00311c", tertiary: "#dcccff", "on-primary-container": "#245300", outline: "#88957d", "on-secondary-fixed-variant": "#005232", "on-tertiary": "#3c0091", "on-surface-variant": "#becbb1", "surface-bright": "#37393f", "inverse-surface": "#e2e2e9", "on-error": "#690005", "on-error-container": "#ffdad6"}, borderRadius: {DEFAULT: "0.125rem", lg: "0.25rem", xl: "0.5rem", full: "0.75rem"}, spacing: {gutter: "1rem", "gutter-lg": "1.5rem", "gutter-sm": "0.5rem", "space-sm": "0.5rem", margin: "1.5rem", "space-md": "0.75rem", "space-lg": "1rem", "space-xs": "0.25rem", "space-xl": "1.5rem", "space-2xl": "2rem", "margin-mobile": "1rem"}, fontFamily: {"code-md": ["JetBrains Mono"], "headline-sm": ["Geist"], "headline-lg": ["Geist"], "headline-xl": ["Geist"], "code-sm": ["JetBrains Mono"], "code-lg": ["JetBrains Mono"], "body-sm": ["Geist"], "headline-xl-mobile": ["Geist"], "label-md": ["Geist"], "label-caps": ["JetBrains Mono"], "body-lg": ["Geist"], "headline-md": ["Geist"], "body-md": ["Geist"], headline: ["Geist"], display: ["Geist"], body: ["Geist"], label: ["JetBrains Mono"]}, fontSize: {"code-md": ["12px", {lineHeight: "18px", fontWeight: "400"}], "headline-sm": ["16px", {lineHeight: "24px", letterSpacing: "-0.01em", fontWeight: "500"}], "headline-lg": ["24px", {lineHeight: "32px", letterSpacing: "-0.02em", fontWeight: "600"}], "headline-xl": ["32px", {lineHeight: "40px", letterSpacing: "-0.025em", fontWeight: "600"}], "code-sm": ["11px", {lineHeight: "16px", fontWeight: "500"}], "code-lg": ["14px", {lineHeight: "22px", fontWeight: "400"}], "body-sm": ["13px", {lineHeight: "18px", fontWeight: "400"}], "headline-xl-mobile": ["26px", {lineHeight: "34px", letterSpacing: "-0.02em", fontWeight: "600"}], "label-md": ["12px", {lineHeight: "16px", letterSpacing: "0.02em", fontWeight: "500"}], "label-caps": ["10px", {lineHeight: "14px", letterSpacing: "0.08em", fontWeight: "600"}], "body-lg": ["16px", {lineHeight: "24px", fontWeight: "400"}], "headline-md": ["20px", {lineHeight: "28px", letterSpacing: "-0.015em", fontWeight: "500"}], "body-md": ["14px", {lineHeight: "20px", fontWeight: "400"}]}}}};</script></head><body class="bg-background font-body-md text-on-surface min-h-screen selection:bg-primary-container selection:text-on-primary-container"><aside class="fixed left-0 top-0 h-screen w-64 bg-surface-container-lowest z-50 flex flex-col justify-between border-r border-surface-container"><div class="flex flex-col h-full overflow-hidden"><div class="h-14 px-gutter flex items-center justify-between border-b border-surface-container flex-shrink-0"><div class="flex items-center gap-space-sm"><img alt="PAYLOCK Logo" class="h-6 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1U_ZSyHQTGV4X-EeV2UA1penWwDfEBRnAAKMgbYoccGhdFF99Xm1AwHoj9SzRBTxJu1JexE991BgL-mt-rh2yWjrLrbe1ZwTQWZ16g7rA_hKwGIJ2Ehxi_UW-y8xawdZKzCnpdvqgb0jE3mojY5nwQ7WplVMHqUQaLPY2OcKdfwbF2dx8sKcCM16gOmHVPCd646HuitrtH94h20EjEdHZQqJWdVI_5HtoddMopnzvv3AI4ncUT9Q25zZWMo"/><span class="font-headline-sm text-headline-sm tracking-tight text-on-surface font-semibold">PAYLOCK</span></div><div class="flex items-center gap-space-xs px-space-xs py-[2px] rounded-DEFAULT bg-surface-container border border-surface-container-high"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span><span class="font-code-sm text-code-sm text-primary uppercase">C++ v2.4</span></div></div><div class="px-gutter pt-space-md pb-space-xs flex-shrink-0"><button class="w-full flex items-center justify-between px-space-md py-space-sm rounded-DEFAULT bg-primary-container text-on-primary-container hover:bg-primary hover:text-on-primary transition-colors font-headline-sm text-label-md font-semibold"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[16px]">bolt</span><span>New Transaction</span></div><span class="font-code-sm text-code-sm px-1 rounded bg-on-primary-container/20 text-on-primary-container">N</span></button></div><div class="flex-1 overflow-y-auto px-gutter-sm py-space-xs space-y-space-md"><div class="space-y-0.5"><div class="px-space-sm py-space-xs font-label-caps text-label-caps text-outline uppercase tracking-wider">Core Pipeline</div><nav class="space-y-0.5" data-active-classes="bg-surface-container text-primary font-semibold border-l-2 border-primary"><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="overview" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">terminal</span><span class="font-body-sm text-body-sm">Overview</span></div><span class="font-code-sm text-code-sm text-outline">⌘1</span></a><a aria-current="page" class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT transition-colors bg-surface-container text-primary font-semibold border-l-2 border-primary" data-path="transactions" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">sync_alt</span><span class="font-body-sm text-body-sm">Transactions</span></div><span class="font-code-sm text-code-sm text-outline">⌘2</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="transaction-detail" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">troubleshoot</span><span class="font-body-sm text-body-sm">Txn Inspector</span></div><span class="font-code-sm text-code-sm text-outline">⌘3</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="accounts" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">account_balance</span><span class="font-body-sm text-body-sm">Accounts</span></div><span class="font-code-sm text-code-sm text-outline">⌘4</span></a></nav></div><div class="space-y-0.5"><div class="px-space-sm py-space-xs font-label-caps text-label-caps text-outline uppercase tracking-wider">Concurrency &amp; Locks</div><nav class="space-y-0.5" data-active-classes="bg-surface-container text-primary font-semibold border-l-2 border-primary"><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="concurrency" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">memory</span><span class="font-body-sm text-body-sm">Thread Pool</span></div><span class="font-code-sm text-code-sm text-outline">⌘5</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="lock-manager" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">lock</span><span class="font-body-sm text-body-sm">Lock Manager</span></div><span class="font-code-sm text-code-sm text-outline">⌘6</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="deadlock-monitor" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">hub</span><span class="font-body-sm text-body-sm">Deadlock Monitor</span></div><span class="font-code-sm text-code-sm text-error bg-error-container/20 px-1 rounded">1</span></a></nav></div><div class="space-y-0.5"><div class="px-space-sm py-space-xs font-label-caps text-label-caps text-outline uppercase tracking-wider">Diagnostics &amp; Runtime</div><nav class="space-y-0.5" data-active-classes="bg-surface-container text-primary font-semibold border-l-2 border-primary"><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="resources" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">speed</span><span class="font-body-sm text-body-sm">OS Resources</span></div></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="system-logs" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">receipt_long</span><span class="font-body-sm text-body-sm">System Logs</span></div></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="analytics" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">query_stats</span><span class="font-body-sm text-body-sm">Analytics</span></div></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="system-health" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">vital_signs</span><span class="font-body-sm text-body-sm">Engine Health</span></div></a></nav></div></div><div class="p-gutter-sm border-t border-surface-container bg-surface-container-lowest/80 space-y-space-xs flex-shrink-0"><div class="p-space-xs rounded-DEFAULT bg-surface-container-low border border-surface-container space-y-1 font-code-sm text-code-sm text-outline"><div class="flex items-center justify-between"><span class="text-on-surface-variant">Workers:</span><span class="text-primary font-medium">18 Active</span></div><div class="flex items-center justify-between"><span class="text-on-surface-variant">Locks:</span><span class="text-secondary font-medium">7 Mutex</span></div><div class="flex items-center justify-between"><span class="text-on-surface-variant">IPC Unix:</span><span class="text-primary-container font-medium">ESTABLISHED</span></div></div><div class="flex items-center justify-between px-space-xs pt-space-xs border-t border-surface-container"><div class="flex items-center gap-space-sm min-w-0"><div class="w-6 h-6 rounded-DEFAULT bg-surface-container-high flex items-center justify-center font-code-sm text-code-sm text-primary font-semibold">NR</div><div class="truncate"><div class="font-headline-sm text-body-sm font-medium text-on-surface leading-tight truncate">Nitin Rawat</div><div class="font-code-sm text-code-sm text-outline leading-tight truncate">Systems Eng</div></div></div><a class="text-on-surface-variant hover:text-on-surface transition-colors" href="#"><span class="material-symbols-outlined text-[18px]">settings</span></a></div></div></div></aside><div class="pl-64 flex flex-col min-h-screen"><header class="fixed top-0 left-64 right-0 h-14 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container z-40 px-gutter flex items-center justify-between"><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-xs font-code-sm text-code-sm text-outline"><span class="text-on-surface-variant">PAYLOCK</span><span>/</span><span class="text-on-surface font-medium">ENGINE-CORE-01</span></div><div class="h-4 w-[1px] bg-surface-container"></div><div class="hidden lg:flex items-center gap-space-xs px-space-xs py-0.5 rounded-DEFAULT bg-surface-container text-primary font-code-sm text-code-sm border border-surface-container-high"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span><span>CLUSTER: STABLE • 4.2k TPS</span></div></div><div class="flex items-center gap-space-md"><div class="relative w-80"><span class="material-symbols-outlined absolute left-2.5 top-2 text-[18px] text-outline">search</span><input class="w-full h-8 pl-8 pr-12 rounded-DEFAULT bg-surface-container-low border border-surface-container text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary font-body-sm" placeholder="Search TXN, Thread, Lock, Account..." type="text"/><span class="absolute right-2 top-1.5 font-code-sm text-code-sm px-1 rounded bg-surface-container text-outline border border-surface-container-high">⌘K</span></div><div class="flex items-center gap-space-xs"><button class="h-8 px-space-sm rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-high flex items-center gap-1 font-label-md text-label-md transition-colors" title="Simulate Traffic"><span class="material-symbols-outlined text-[16px] text-secondary">play_arrow</span><span>Simulate</span></button><button class="relative p-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-error ring-2 ring-surface-container-lowest"></span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 pt-14 w-full bg-background"><div class="w-full px-gutter py-margin max-w-full"><div class="flex flex-col w-full space-y-space-md">
+<!-- Telemetry Sub-Bar / Header Meta -->
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-lg rounded-xl shadow-md">
+<div class="flex flex-col space-y-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="font-headline-lg text-headline-lg text-on-surface font-semibold tracking-tight">Transaction Monitor</span>
+<span class="flex items-center gap-1.5 px-2 py-0.5 rounded-DEFAULT bg-primary-container/20 text-primary font-code-sm text-code-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></span>
+          STREAM LIVE
+        </span>
+<span class="font-code-sm text-code-sm text-outline">SHARD-04 // WAL-BUFFER: 99.98%</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">High-velocity payment ingestion stream with synchronized lock and thread states</p>
+</div>
+<!-- Diagnostic Micro-Counters -->
+<div class="flex items-center gap-space-sm overflow-x-auto pb-1 lg:pb-0">
+<div class="flex flex-col bg-surface-container px-space-md py-space-xs rounded-DEFAULT min-w-[110px]">
+<span class="font-label-caps text-label-caps text-outline uppercase">Throughput</span>
+<div class="flex items-baseline gap-1">
+<span class="font-code-lg text-code-lg text-primary font-semibold">4,281</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">TPS</span>
+</div>
+</div>
+<div class="flex flex-col bg-surface-container px-space-md py-space-xs rounded-DEFAULT min-w-[110px]">
+<span class="font-label-caps text-label-caps text-outline uppercase">P99 Duration</span>
+<div class="flex items-baseline gap-1">
+<span class="font-code-lg text-code-lg text-secondary font-semibold">142</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">ms</span>
+</div>
+</div>
+<div class="flex flex-col bg-surface-container px-space-md py-space-xs rounded-DEFAULT min-w-[110px]">
+<span class="font-label-caps text-label-caps text-outline uppercase">Contention</span>
+<div class="flex items-baseline gap-1">
+<span class="font-code-lg text-code-lg text-error font-semibold">0.04%</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">MUTEX</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Realtime Contention Bar Graph Sparkline Banner -->
+<div class="bg-surface-container-low px-space-lg py-space-sm rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-space-sm shadow-sm">
+<div class="flex items-center gap-space-md">
+<span class="font-label-caps text-label-caps text-outline uppercase flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px] text-primary">ssid_chart</span>
+        Ingest Velocity (Last 60s)
+      </span>
+<div class="hidden sm:flex items-center gap-1 h-5">
+<div class="w-1.5 h-3 bg-primary/40 rounded-DEFAULT"></div>
+<div class="w-1.5 h-4 bg-primary/60 rounded-DEFAULT"></div>
+<div class="w-1.5 h-5 bg-primary rounded-DEFAULT"></div>
+<div class="w-1.5 h-3 bg-primary/70 rounded-DEFAULT"></div>
+<div class="w-1.5 h-2 bg-primary/40 rounded-DEFAULT"></div>
+<div class="w-1.5 h-4 bg-primary/80 rounded-DEFAULT"></div>
+<div class="w-1.5 h-5 bg-primary rounded-DEFAULT"></div>
+<div class="w-1.5 h-3 bg-secondary rounded-DEFAULT"></div>
+<div class="w-1.5 h-4 bg-primary rounded-DEFAULT"></div>
+<div class="w-1.5 h-2 bg-error rounded-DEFAULT" title="Lock wait spike"></div>
+<div class="w-1.5 h-5 bg-primary rounded-DEFAULT"></div>
+<div class="w-1.5 h-4 bg-primary/90 rounded-DEFAULT"></div>
+</div>
+</div>
+<div class="flex items-center gap-space-md font-code-sm text-code-sm">
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span>2PL Protocol: RIGID</span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span>Snapshot Isolation: ACTIVE</span>
+</div>
+<div class="flex items-center gap-1 text-tertiary">
+<span class="material-symbols-outlined text-[14px]">tune</span>
+<span>Epoch: #88204-TX</span>
+</div>
+</div>
+</div>
+<!-- Primary Control Strip -->
+<div class="flex flex-col gap-space-sm bg-surface-container-lowest p-space-md rounded-xl shadow-md">
+<!-- Row 1: Search, Time Picker, Action Buttons -->
+<div class="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-space-sm">
+<!-- Search Input with Syntax Hint -->
+<div class="relative flex-1 min-w-[280px]">
+<span class="material-symbols-outlined absolute left-3 top-2 text-[18px] text-outline">manage_search</span>
+<input class="w-full h-9 pl-9 pr-24 rounded-DEFAULT bg-surface-container-low text-on-surface placeholder:text-outline font-body-sm text-body-sm focus:outline-none focus:bg-surface-container" placeholder="Search by TXN-ID, Account, Thread (T-*), Lock ID (LOCK-*)..." type="text"/>
+<div class="absolute right-2 top-1.5 flex items-center gap-1">
+<span class="font-code-sm text-code-sm px-1.5 py-0.5 rounded bg-surface-container-high text-outline">Esc</span>
+</div>
+</div>
+<!-- Secondary Controls & Buttons -->
+<div class="flex flex-wrap items-center gap-space-xs">
+<!-- Time Range Selector -->
+<div class="flex items-center bg-surface-container-low p-0.5 rounded-DEFAULT">
+<button class="px-space-sm py-1 font-code-sm text-code-sm rounded-DEFAULT bg-surface-container-high text-primary font-medium">15m</button>
+<button class="px-space-sm py-1 font-code-sm text-code-sm rounded-DEFAULT text-on-surface-variant hover:text-on-surface">1h</button>
+<button class="px-space-sm py-1 font-code-sm text-code-sm rounded-DEFAULT text-on-surface-variant hover:text-on-surface">24h</button>
+<button class="px-space-sm py-1 font-code-sm text-code-sm rounded-DEFAULT text-on-surface-variant hover:text-on-surface flex items-center gap-1">
+<span>Custom</span>
+<span class="material-symbols-outlined text-[14px]">calendar_today</span>
+</button>
+</div>
+<div class="h-6 w-[1px] bg-surface-container mx-1 hidden sm:block"></div>
+<!-- Action: Stress Simulation -->
+<button class="h-9 px-space-md rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center gap-1.5 font-headline-sm text-label-md transition-colors group" id="btn-stress-test">
+<span class="material-symbols-outlined text-[16px] text-primary group-hover:rotate-45 transition-transform">cyclone</span>
+<span>Stress Test (5k TPS)</span>
+</button>
+<!-- Action: Export WAL Logs -->
+<button class="h-9 px-space-md rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center gap-1.5 font-headline-sm text-label-md transition-colors">
+<span class="material-symbols-outlined text-[16px] text-secondary">file_download</span>
+<span>WAL Dump</span>
+</button>
+<!-- Action: Pause Stream Toggle -->
+<button class="h-9 px-space-md rounded-DEFAULT bg-surface-container-high hover:bg-surface-bright text-primary flex items-center gap-1.5 font-headline-sm text-label-md transition-colors" id="btn-toggle-stream">
+<span class="material-symbols-outlined text-[16px]" id="stream-icon">pause</span>
+<span id="stream-text">Pause Feed</span>
+</button>
+</div>
+</div>
+<!-- Row 2: Status Pills Filter -->
+<div class="flex items-center gap-space-xs overflow-x-auto pt-1 pb-0.5">
+<span class="font-label-caps text-label-caps text-outline uppercase mr-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">filter_alt</span>
+        State:
+      </span>
+<button class="flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-primary text-on-primary font-headline-sm text-label-md font-medium">
+<span>All</span>
+<span class="font-code-sm text-code-sm px-1 rounded bg-on-primary/20">12,482</span>
+</button>
+<button class="flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-label-md transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+<span>Committed</span>
+<span class="font-code-sm text-code-sm text-outline">12,210</span>
+</button>
+<button class="flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-label-md transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
+<span>Processing</span>
+<span class="font-code-sm text-code-sm text-outline">14</span>
+</button>
+<button class="flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-label-md transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>Waiting</span>
+<span class="font-code-sm text-code-sm text-secondary font-medium">6</span>
+</button>
+<button class="flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-label-md transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span>Rolled Back</span>
+<span class="font-code-sm text-code-sm text-outline">218</span>
+</button>
+<button class="flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-error-container/30 hover:bg-error-container/50 text-error font-headline-sm text-label-md transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-error animate-ping"></span>
+<span>Failed / Deadlock</span>
+<span class="font-code-sm text-code-sm px-1 rounded bg-error-container text-on-error">54</span>
+</button>
+</div>
+</div>
+<!-- Dense Production Data Table Card -->
+<div class="relative bg-surface-container-lowest rounded-xl shadow-md overflow-hidden flex flex-col">
+<!-- Stream Live Status Floating Notch -->
+<div class="flex items-center justify-between px-space-md py-space-xs bg-surface-container-low text-outline font-code-sm text-code-sm">
+<div class="flex items-center gap-space-sm">
+<span class="text-on-surface-variant">LEDGER REGION: ap-south-mum1</span>
+<span>•</span>
+<span>ENGINE: LOCK_POOL_MUTEX_V2</span>
+<span>•</span>
+<span class="text-primary font-medium">CONCURRENCY SLOTS: 64/64 ENGAGED</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="cursor-pointer hover:text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">view_column</span> Custom Columns
+        </span>
+<span>•</span>
+<span class="cursor-pointer hover:text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">density_medium</span> Compact
+        </span>
+</div>
+</div>
+<!-- Table Container -->
+<div class="w-full overflow-x-auto">
+<table class="w-full border-collapse text-left">
+<thead>
+<tr class="bg-surface-container text-outline font-label-caps text-label-caps uppercase tracking-wider select-none">
+<th class="py-space-sm px-space-md">TXN ID</th>
+<th class="py-space-sm px-space-md">Timestamp</th>
+<th class="py-space-sm px-space-md">Sender Account</th>
+<th class="py-space-sm px-space-md">Receiver Account</th>
+<th class="py-space-sm px-space-md text-right">Amount (₹)</th>
+<th class="py-space-sm px-space-md">Worker</th>
+<th class="py-space-sm px-space-md">State</th>
+<th class="py-space-sm px-space-md text-right">Latency</th>
+<th class="py-space-sm px-space-md">Lock State</th>
+<th class="py-space-sm px-space-md">DB Op</th>
+<th class="py-space-sm px-space-md text-center">Inspect</th>
+</tr>
+</thead>
+<tbody class="divide-y-0 text-on-surface font-body-sm text-body-sm">
+<!-- Row 1: COMMITTED -->
+<tr class="hover:bg-surface-container transition-colors group bg-surface-container-lowest">
+<td class="py-space-sm px-space-md font-code-md text-code-md font-medium text-primary">
+<span class="cursor-pointer hover:underline">TXN-10482</span>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">10:42:18.420</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-101</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Nitin Rawat</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-204</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Vedika Negi</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-md text-code-md font-semibold text-on-surface">
+              ₹2,000.00
+            </td>
+<td class="py-space-sm px-space-md">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high font-code-sm text-code-sm text-secondary">T-04</span>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-DEFAULT bg-primary/10 text-primary font-code-sm text-code-sm font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                COMMITTED
+              </span>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-sm text-code-sm text-outline">
+              124ms
+            </td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1 font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[14px] text-primary">lock</span>
+<span class="text-on-surface">LOCK-21</span>
+<span class="text-outline">(Exclusive)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">
+              2PL Commit
+            </td>
+<td class="py-space-sm px-space-md text-center">
+<button class="p-1 rounded-DEFAULT bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface-variant transition-colors" onclick="openDrawer('TXN-10482', 'COMMITTED', '2,000.00', 'ACC-101', 'ACC-204', 'LOCK-21 (Exclusive)', 'T-04', '124ms')" title="Inspect Telemetry">
+<span class="material-symbols-outlined text-[16px]">troubleshoot</span>
+</button>
+</td>
+</tr>
+<!-- Row 2: WAITING (BLOCKED) -->
+<tr class="hover:bg-surface-container transition-colors group bg-surface-container-low/50">
+<td class="py-space-sm px-space-md font-code-md text-code-md font-medium text-secondary">
+<span class="cursor-pointer hover:underline">TXN-10483</span>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">10:42:19.102</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-103</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Megha</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-101</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Nitin Rawat</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-md text-code-md font-semibold text-secondary">
+              ₹8,500.00
+            </td>
+<td class="py-space-sm px-space-md">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high font-code-sm text-code-sm text-secondary">T-02</span>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-DEFAULT bg-secondary-container/20 text-secondary-fixed font-code-sm text-code-sm font-medium">
+<span class="material-symbols-outlined text-[13px] animate-spin">sync</span>
+                WAITING
+              </span>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-sm text-code-sm text-secondary font-medium">
+              1,420ms
+            </td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1 font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[14px] text-secondary">lock_clock</span>
+<span class="text-secondary font-medium">LOCK-21</span>
+<span class="text-error font-medium">(Blocked)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-secondary">
+              Awaiting Mutex
+            </td>
+<td class="py-space-sm px-space-md text-center">
+<button class="p-1 rounded-DEFAULT bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface-variant transition-colors" onclick="openDrawer('TXN-10483', 'WAITING', '8,500.00', 'ACC-103', 'ACC-101', 'LOCK-21 (Blocked)', 'T-02', '1,420ms')" title="Inspect Telemetry">
+<span class="material-symbols-outlined text-[16px]">troubleshoot</span>
+</button>
+</td>
+</tr>
+<!-- Row 3: COMMITTED -->
+<tr class="hover:bg-surface-container transition-colors group bg-surface-container-lowest">
+<td class="py-space-sm px-space-md font-code-md text-code-md font-medium text-primary">
+<span class="cursor-pointer hover:underline">TXN-10484</span>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">10:42:19.510</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-104</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Vedika Negi</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-102</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Ansh Singh</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-md text-code-md font-semibold text-on-surface">
+              ₹14,200.00
+            </td>
+<td class="py-space-sm px-space-md">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high font-code-sm text-code-sm text-secondary">T-05</span>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-DEFAULT bg-primary/10 text-primary font-code-sm text-code-sm font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                COMMITTED
+              </span>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-sm text-code-sm text-outline">
+              92ms
+            </td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1 font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[14px] text-outline">lock_open</span>
+<span class="text-on-surface">LOCK-25</span>
+<span class="text-outline">(Shared)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">
+              2PL Commit
+            </td>
+<td class="py-space-sm px-space-md text-center">
+<button class="p-1 rounded-DEFAULT bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface-variant transition-colors" onclick="openDrawer('TXN-10484', 'COMMITTED', '14,200.00', 'ACC-104', 'ACC-102', 'LOCK-25 (Shared)', 'T-05', '92ms')" title="Inspect Telemetry">
+<span class="material-symbols-outlined text-[16px]">troubleshoot</span>
+</button>
+</td>
+</tr>
+<!-- Row 4: PROCESSING -->
+<tr class="hover:bg-surface-container transition-colors group bg-surface-container-low/30">
+<td class="py-space-sm px-space-md font-code-md text-code-md font-medium text-primary">
+<span class="cursor-pointer hover:underline">TXN-10485</span>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">10:42:20.005</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-102</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Ansh Singh</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-103</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Megha</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-md text-code-md font-semibold text-primary">
+              ₹3,400.00
+            </td>
+<td class="py-space-sm px-space-md">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high font-code-sm text-code-sm text-primary">T-01</span>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-DEFAULT bg-primary-container/20 text-primary font-code-sm text-code-sm font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></span>
+                PROCESSING
+              </span>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-sm text-code-sm text-primary font-medium">
+              48ms
+            </td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1 font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[14px] text-primary">lock</span>
+<span class="text-on-surface">LOCK-17</span>
+<span class="text-outline">(Exclusive)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-primary">
+              Balance Write
+            </td>
+<td class="py-space-sm px-space-md text-center">
+<button class="p-1 rounded-DEFAULT bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface-variant transition-colors" onclick="openDrawer('TXN-10485', 'PROCESSING', '3,400.00', 'ACC-102', 'ACC-103', 'LOCK-17 (Exclusive)', 'T-01', '48ms')" title="Inspect Telemetry">
+<span class="material-symbols-outlined text-[16px]">troubleshoot</span>
+</button>
+</td>
+</tr>
+<!-- Row 5: ROLLED BACK -->
+<tr class="hover:bg-surface-container transition-colors group bg-surface-container-lowest">
+<td class="py-space-sm px-space-md font-code-md text-code-md font-medium text-error">
+<span class="cursor-pointer hover:underline">TXN-10481</span>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">10:42:16.890</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-105</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Rohan</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-106</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Kavita</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-md text-code-md font-semibold text-outline line-through">
+              ₹50,000.00
+            </td>
+<td class="py-space-sm px-space-md">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high font-code-sm text-code-sm text-secondary">T-07</span>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-DEFAULT bg-error-container/20 text-error font-code-sm text-code-sm font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+                ROLLED BACK
+              </span>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-sm text-code-sm text-outline">
+              310ms
+            </td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1 font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[14px] text-outline">lock_open</span>
+<span class="text-on-surface">LOCK-19</span>
+<span class="text-outline">(Released)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-error truncate max-w-[160px]" title="Aborted: Insufficient Balance">
+              Aborted: Insuff. Bal
+            </td>
+<td class="py-space-sm px-space-md text-center">
+<button class="p-1 rounded-DEFAULT bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface-variant transition-colors" onclick="openDrawer('TXN-10481', 'ROLLED BACK', '50,000.00', 'ACC-105', 'ACC-106', 'LOCK-19 (Released)', 'T-07', '310ms')" title="Inspect Telemetry">
+<span class="material-symbols-outlined text-[16px]">troubleshoot</span>
+</button>
+</td>
+</tr>
+<!-- Row 6: COMMITTED -->
+<tr class="hover:bg-surface-container transition-colors group bg-surface-container-lowest">
+<td class="py-space-sm px-space-md font-code-md text-code-md font-medium text-primary">
+<span class="cursor-pointer hover:underline">TXN-10480</span>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">10:42:15.340</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-101</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Nitin Rawat</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-103</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Megha</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-md text-code-md font-semibold text-on-surface">
+              ₹1,200.00
+            </td>
+<td class="py-space-sm px-space-md">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high font-code-sm text-code-sm text-secondary">T-03</span>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-DEFAULT bg-primary/10 text-primary font-code-sm text-code-sm font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                COMMITTED
+              </span>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-sm text-code-sm text-outline">
+              88ms
+            </td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1 font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[14px] text-primary">lock</span>
+<span class="text-on-surface">LOCK-14</span>
+<span class="text-outline">(Exclusive)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">
+              2PL Commit
+            </td>
+<td class="py-space-sm px-space-md text-center">
+<button class="p-1 rounded-DEFAULT bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface-variant transition-colors" onclick="openDrawer('TXN-10480', 'COMMITTED', '1,200.00', 'ACC-101', 'ACC-103', 'LOCK-14 (Exclusive)', 'T-03', '88ms')" title="Inspect Telemetry">
+<span class="material-symbols-outlined text-[16px]">troubleshoot</span>
+</button>
+</td>
+</tr>
+<!-- Row 7: DEADLOCK ABORT -->
+<tr class="hover:bg-surface-container transition-colors group bg-error-container/10">
+<td class="py-space-sm px-space-md font-code-md text-code-md font-bold text-error">
+<span class="cursor-pointer hover:underline">TXN-10479</span>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">10:42:14.010</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-108</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Pooja</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-code-sm text-code-sm text-outline">ACC-102</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate max-w-[110px]">Ansh Singh</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-md text-code-md font-semibold text-error">
+              ₹6,750.00
+            </td>
+<td class="py-space-sm px-space-md">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high font-code-sm text-code-sm text-secondary">T-08</span>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-DEFAULT bg-error-container text-on-error-container font-code-sm text-code-sm font-semibold">
+<span class="material-symbols-outlined text-[12px]">warning</span>
+                DEADLOCK ABORT
+              </span>
+</td>
+<td class="py-space-sm px-space-md text-right font-code-sm text-code-sm text-error font-medium">
+              450ms
+            </td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1 font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[14px] text-error">emergency_home</span>
+<span class="text-error font-medium">LOCK-22</span>
+<span class="text-error">(Victim)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md font-code-sm text-code-sm text-error">
+              Rollback Triggered
+            </td>
+<td class="py-space-sm px-space-md text-center">
+<button class="p-1 rounded-DEFAULT bg-error/20 hover:bg-error hover:text-on-error text-error transition-colors" onclick="openDrawer('TXN-10479', 'DEADLOCK ABORT', '6,750.00', 'ACC-108', 'ACC-102', 'LOCK-22 (Victim)', 'T-08', '450ms')" title="Inspect Deadlock Cycle">
+<span class="material-symbols-outlined text-[16px]">troubleshoot</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination & Realtime Health Footer -->
+<div class="flex flex-col sm:flex-row items-center justify-between gap-space-sm px-space-md py-space-sm bg-surface-container-low border-t border-surface-container">
+<div class="flex flex-wrap items-center gap-space-md font-code-sm text-code-sm text-outline">
+<span class="text-on-surface">Showing <span class="text-primary font-medium">1-15</span> of 12,482 txns</span>
+<span class="hidden md:inline">•</span>
+<span>Ingestion Latency: <span class="text-primary font-medium">4.2ms</span></span>
+<span class="hidden md:inline">•</span>
+<span>Active Lock Waiters: <span class="text-secondary font-medium">3 threads</span></span>
+<span class="hidden md:inline">•</span>
+<span class="flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+          Auto-refresh: 1s
+        </span>
+</div>
+<!-- Compact Pagination Stepper -->
+<div class="flex items-center gap-1">
+<button class="h-7 px-2 rounded-DEFAULT bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors text-code-sm font-code-sm flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">first_page</span>
+</button>
+<button class="h-7 px-2 rounded-DEFAULT bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors text-code-sm font-code-sm flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">chevron_left</span>
+</button>
+<span class="px-2 font-code-sm text-code-sm text-on-surface">Page 1 / 833</span>
+<button class="h-7 px-2 rounded-DEFAULT bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors text-code-sm font-code-sm flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
+<button class="h-7 px-2 rounded-DEFAULT bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors text-code-sm font-code-sm flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">last_page</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Telemetry Drilldown Side Inspector (Hidden by Default, toggled via JS) -->
+<div class="fixed inset-0 bg-surface-container-lowest/70 backdrop-blur-sm z-50 transition-opacity hidden" id="inspector-overlay">
+<div class="fixed right-0 top-0 h-screen w-full max-w-lg bg-surface-container-low shadow-xl p-space-lg flex flex-col justify-between overflow-y-auto">
+<div class="space-y-space-md">
+<!-- Inspector Header -->
+<div class="flex items-center justify-between pb-space-sm bg-surface-container-low">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-[22px]">memory</span>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface font-semibold" id="ins-txn-id">TXN-10482</div>
+<div class="font-code-sm text-code-sm text-outline">Thread Inspector &amp; Lock Graph</div>
+</div>
+</div>
+<button class="p-1 rounded hover:bg-surface-container text-outline hover:text-on-surface" onclick="closeDrawer()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Status Summary Pill -->
+<div class="bg-surface-container p-space-md rounded-DEFAULT space-y-space-xs">
+<div class="flex justify-between items-center">
+<span class="font-label-caps text-label-caps text-outline uppercase">EXECUTION STATUS</span>
+<span class="font-code-sm text-code-sm px-2 py-0.5 rounded font-semibold bg-primary/20 text-primary" id="ins-status-badge">COMMITTED</span>
+</div>
+<div class="flex justify-between items-center pt-1 font-code-md text-code-md">
+<span class="text-on-surface-variant">Amount:</span>
+<span class="text-on-surface font-semibold" id="ins-amount">₹2,000.00</span>
+</div>
+</div>
+<!-- Participants Matrix -->
+<div class="grid grid-cols-2 gap-space-sm">
+<div class="bg-surface-container p-space-sm rounded-DEFAULT">
+<span class="font-label-caps text-label-caps text-outline uppercase">SENDER</span>
+<div class="font-code-md text-code-md text-primary font-medium mt-1" id="ins-sender">ACC-101</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant truncate">Nitin Rawat</div>
+</div>
+<div class="bg-surface-container p-space-sm rounded-DEFAULT">
+<span class="font-label-caps text-label-caps text-outline uppercase">RECEIVER</span>
+<div class="font-code-md text-code-md text-secondary font-medium mt-1" id="ins-receiver">ACC-204</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant truncate">Vedika Negi</div>
+</div>
+</div>
+<!-- Concurrency & Locking Timeline -->
+<div class="bg-surface-container p-space-md rounded-DEFAULT space-y-space-sm">
+<span class="font-label-caps text-label-caps text-outline uppercase flex items-center justify-between">
+<span>2-Phase Locking Timeline</span>
+<span class="text-primary font-code-sm text-code-sm" id="ins-latency">124ms total</span>
+</span>
+<div class="space-y-2 pt-1 font-code-sm text-code-sm">
+<div class="flex items-start gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary mt-1.5"></span>
+<div class="flex-1">
+<div class="text-on-surface font-medium">Acquired Exclusive Lock</div>
+<div class="text-outline" id="ins-lock">LOCK-21 (Exclusive) via Worker T-04</div>
+</div>
+<span class="text-outline">T+0ms</span>
+</div>
+<div class="flex items-start gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary mt-1.5"></span>
+<div class="flex-1">
+<div class="text-on-surface font-medium">Ledger Balances Deducted &amp; Credited</div>
+<div class="text-outline">ACID Snapshot verified without conflicts</div>
+</div>
+<span class="text-outline">T+42ms</span>
+</div>
+<div class="flex items-start gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container mt-1.5"></span>
+<div class="flex-1">
+<div class="text-on-surface font-medium">WAL Sync &amp; Lock Release</div>
+<div class="text-outline">Flushed to persistent storage / Disk LSN #99401</div>
+</div>
+<span class="text-outline">T+124ms</span>
+</div>
+</div>
+</div>
+<!-- Raw WAL Payload Segment -->
+<div class="bg-surface-container-lowest p-space-md rounded-DEFAULT space-y-space-xs">
+<div class="flex items-center justify-between font-label-caps text-label-caps text-outline uppercase">
+<span>WAL Buffer Raw Log</span>
+<span class="text-secondary font-code-sm text-code-sm">RAW_C++_STRUCT</span>
+</div>
+<pre class="font-code-sm text-code-sm text-on-surface-variant overflow-x-auto p-2 bg-surface-container-low rounded">struct TxnBlock {
+  uint64_t id = 10482;
+  LockType lock = LOCK_EXCLUSIVE;
+  WorkerThread* w = &amp;T_04;
+  uint8_t flags = WAL_COMMIT_2PL;
+  bool is_victim = false;
+};</pre>
+</div>
+</div>
+<!-- Drawer Action Footer -->
+<div class="pt-space-md flex items-center gap-space-sm">
+<button class="flex-1 py-space-sm rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface font-headline-sm text-label-md transition-colors" onclick="closeDrawer()">
+          Dismiss
+        </button>
+<button class="py-space-sm px-space-md rounded-DEFAULT bg-primary text-on-primary hover:bg-primary-container font-headline-sm text-label-md font-medium transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">terminal</span>
+<span>Copy Hex Dmp</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<script>
+  // Drawer interactivity
+  function openDrawer(txnId, status, amount, sender, receiver, lock, thread, latency) {
+    document.getElementById('ins-txn-id').innerText = txnId;
+    document.getElementById('ins-status-badge').innerText = status;
+    document.getElementById('ins-amount').innerText = '₹' + amount;
+    document.getElementById('ins-sender').innerText = sender;
+    document.getElementById('ins-receiver').innerText = receiver;
+    document.getElementById('ins-lock').innerText = lock + ' via Worker ' + thread;
+    document.getElementById('ins-latency').innerText = latency + ' total';
+
+    const overlay = document.getElementById('inspector-overlay');
+    overlay.classList.remove('hidden');
+  }
+
+  function closeDrawer() {
+    document.getElementById('inspector-overlay').classList.add('hidden');
+  }
+
+  // Toggle Stream Play/Pause
+  const toggleBtn = document.getElementById('btn-toggle-stream');
+  let isPaused = false;
+  toggleBtn.addEventListener('click', () => {
+    isPaused = !isPaused;
+    const icon = document.getElementById('stream-icon');
+    const text = document.getElementById('stream-text');
+    if (isPaused) {
+      icon.innerText = 'play_arrow';
+      text.innerText = 'Resume Feed';
+      toggleBtn.classList.add('text-secondary');
+    } else {
+      icon.innerText = 'pause';
+      text.innerText = 'Pause Feed';
+      toggleBtn.classList.remove('text-secondary');
+    }
+  });
+
+  // Stress test feedback button
+  const stressBtn = document.getElementById('btn-stress-test');
+  stressBtn.addEventListener('click', () => {
+    stressBtn.classList.add('opacity-50');
+    stressBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Injecting 5k TPS...</span>';
+    setTimeout(() => {
+      stressBtn.classList.remove('opacity-50');
+      stressBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] text-primary">cyclone</span><span>Stress Test (5k TPS)</span>';
+    }, 1800);
+  });
+</script></div></main></div></body></html>

@@ -1,119 +1,1137 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PayLock — Concurrent Transaction Dashboard</title>
-    <link rel="stylesheet" href="css/style.css">
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>PayLock — Concurrent Payment Transaction Management System</title>
+  
+  <!-- Fonts & Material Icons (Stitch Design Specification) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+  
+  <!-- Tailwind CSS Engine -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "tertiary-container": "#c3abff",
+          "secondary-fixed": "#78fbb6",
+          "on-primary": "#163800",
+          "error-container": "#93000a",
+          "on-tertiary-container": "#571ac0",
+          surface: "#111318",
+          "on-primary-fixed-variant": "#235100",
+          "outline-variant": "#3f4a36",
+          "on-background": "#e2e2e9",
+          "secondary-fixed-dim": "#59de9b",
+          "primary-container": "#64d000",
+          "on-secondary-fixed": "#002111",
+          secondary: "#59de9b",
+          "surface-container-low": "#1a1b21",
+          "tertiary-fixed-dim": "#d0bcff",
+          "tertiary-fixed": "#e9ddff",
+          "surface-container-highest": "#33353a",
+          "surface-container-lowest": "#0c0e13",
+          "surface-variant": "#33353a",
+          "surface-container-high": "#282a2f",
+          "on-surface": "#e2e2e9",
+          "primary-fixed-dim": "#6ce000",
+          "primary-fixed": "#81ff1e",
+          "secondary-container": "#00a669",
+          "inverse-on-surface": "#2e3036",
+          "on-primary-fixed": "#0a2100",
+          "on-tertiary-fixed-variant": "#5516be",
+          "inverse-primary": "#316b00",
+          background: "#111318",
+          "on-secondary": "#003921",
+          error: "#ffb4ab",
+          "surface-dim": "#111318",
+          "surface-container": "#1e1f25",
+          primary: "#74ef00",
+          "surface-tint": "#6ce000",
+          "on-tertiary-fixed": "#23005c",
+          "on-secondary-container": "#00311c",
+          tertiary: "#dcccff",
+          "on-primary-container": "#245300",
+          outline: "#88957d",
+          "on-secondary-fixed-variant": "#005232",
+          "on-tertiary": "#3c0091",
+          "on-surface-variant": "#becbb1",
+          "surface-bright": "#37393f",
+          "inverse-surface": "#e2e2e9",
+          "on-error": "#690005",
+          "on-error-container": "#ffdad6"
+        },
+        borderRadius: {
+          DEFAULT: "0.125rem",
+          lg: "0.25rem",
+          xl: "0.5rem",
+          full: "0.75rem"
+        },
+        spacing: {
+          gutter: "1.5rem",
+          "gutter-lg": "2rem",
+          "gutter-sm": "1rem",
+          "space-sm": "0.5rem",
+          margin: "1.5rem",
+          "space-md": "0.75rem",
+          "space-lg": "1rem",
+          "space-xs": "0.25rem",
+          "space-xl": "1.5rem",
+          "space-2xl": "2rem",
+          "margin-mobile": "1rem"
+        },
+        fontFamily: {
+          "code-md": ["JetBrains Mono"],
+          "headline-sm": ["Geist"],
+          "headline-lg": ["Geist"],
+          "headline-xl": ["Geist"],
+          "code-sm": ["JetBrains Mono"],
+          "code-lg": ["JetBrains Mono"],
+          "body-sm": ["Geist"],
+          "headline-xl-mobile": ["Geist"],
+          "label-md": ["Geist"],
+          "label-caps": ["JetBrains Mono"],
+          "body-lg": ["Geist"],
+          "headline-md": ["Geist"],
+          "body-md": ["Geist"],
+          headline: ["Geist"],
+          display: ["Geist"],
+          body: ["Geist"],
+          label: ["JetBrains Mono"]
+        },
+        fontSize: {
+          "code-md": ["12px", {lineHeight: "18px", fontWeight: "400"}],
+          "headline-sm": ["16px", {lineHeight: "24px", letterSpacing: "-0.01em", fontWeight: "500"}],
+          "headline-lg": ["24px", {lineHeight: "32px", letterSpacing: "-0.02em", fontWeight: "600"}],
+          "headline-xl": ["32px", {lineHeight: "40px", letterSpacing: "-0.025em", fontWeight: "600"}],
+          "code-sm": ["11px", {lineHeight: "16px", fontWeight: "500"}],
+          "code-lg": ["14px", {lineHeight: "22px", fontWeight: "400"}],
+          "body-sm": ["13px", {lineHeight: "18px", fontWeight: "400"}],
+          "headline-xl-mobile": ["26px", {lineHeight: "34px", letterSpacing: "-0.02em", fontWeight: "600"}],
+          "label-md": ["12px", {lineHeight: "16px", letterSpacing: "0.02em", fontWeight: "500"}],
+          "label-caps": ["10px", {lineHeight: "14px", letterSpacing: "0.08em", fontWeight: "600"}],
+          "body-lg": ["16px", {lineHeight: "24px", fontWeight: "400"}],
+          "headline-md": ["20px", {lineHeight: "28px", letterSpacing: "-0.015em", fontWeight: "500"}],
+          "body-md": ["14px", {lineHeight: "20px", fontWeight: "400"}]
+        }
+      }
+    }
+  };
+  </script>
+
+  <!-- Custom App Styles -->
+  <link rel="stylesheet" href="css/style.css"/>
 </head>
-<body>
-    <div class="dashboard-container">
-        <!-- Header -->
-        <header class="header">
-            <div class="brand">
-                <span class="logo-icon">🔒</span>
-                <h1>PayLock Dashboard</h1>
-            </div>
-            <div class="system-status">
-                <span class="status-indicator online"></span>
-                <span>System Online (C++ Engine + MySQL)</span>
-            </div>
-        </header>
+<body class="bg-background font-body-md text-on-surface min-h-screen selection:bg-primary-container selection:text-on-primary-container">
 
-        <!-- Metrics Overview -->
-        <section class="metrics-grid">
-            <div class="metric-card">
-                <div class="metric-title">Active Accounts</div>
-                <div class="metric-value" id="val-accounts">3</div>
-                <div class="metric-sub">Nitin (101), Ansh (102), Megha (103)</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-title">Active Threads</div>
-                <div class="metric-value" id="val-threads">4</div>
-                <div class="metric-sub">std::thread workers</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-title">Total Transactions</div>
-                <div class="metric-value" id="val-transactions">9</div>
-                <div class="metric-sub">8 Committed / 1 Rolled Back</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-title">Avg Execution Time</div>
-                <div class="metric-value" id="val-time">22 ms</div>
-                <div class="metric-sub">High concurrency benchmark</div>
-            </div>
-        </section>
+  <!-- ==================== FIXED SIDEBAR (256px) ==================== -->
+  <aside class="fixed left-0 top-0 h-screen w-64 bg-surface-container-lowest z-50 flex flex-col justify-between border-r border-surface-container">
+    <div class="flex flex-col h-full overflow-hidden">
+      <!-- Brand & Version Chip -->
+      <div class="h-14 px-gutter flex items-center justify-between border-b border-surface-container flex-shrink-0">
+        <div class="flex items-center gap-space-sm cursor-pointer" id="nav-brand-btn">
+          <span class="material-symbols-outlined text-primary text-[24px]">lock</span>
+          <span class="font-headline-sm text-headline-sm tracking-tight text-on-surface font-semibold">PAYLOCK</span>
+        </div>
+        <div class="flex items-center gap-space-xs px-space-xs py-[2px] rounded-DEFAULT bg-surface-container border border-surface-container-high">
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" id="backend-status-dot"></span>
+          <span class="font-code-sm text-code-sm text-primary uppercase" id="backend-version-chip">C++ v2.4</span>
+        </div>
+      </div>
 
-        <!-- Main Content Grid -->
-        <div class="content-grid">
-            <!-- Account Balances & Quick Transfer -->
-            <div class="panel">
-                <h2>Account Balances</h2>
-                <div class="accounts-list" id="accounts-container">
-                    <!-- Populated via JS -->
-                </div>
+      <!-- Quick Action: New Transaction -->
+      <div class="px-gutter pt-space-md pb-space-xs flex-shrink-0">
+        <button id="open-transfer-modal-btn" class="w-full flex items-center justify-between px-space-md py-space-sm rounded-DEFAULT bg-primary-container text-on-primary-container hover:bg-primary hover:text-on-primary transition-colors font-headline-sm text-label-md font-semibold">
+          <div class="flex items-center gap-space-sm">
+            <span class="material-symbols-outlined text-[16px]">bolt</span>
+            <span>New Transaction</span>
+          </div>
+          <span class="font-code-sm text-code-sm px-1 rounded bg-on-primary-container/20 text-on-primary-container">N</span>
+        </button>
+      </div>
 
-                <h3 style="margin-top: 24px;">Simulate Concurrent Transfer</h3>
-                <form id="transfer-form" class="transfer-form">
-                    <div class="form-row">
-                        <select id="sender-select" required>
-                            <option value="101">Account 101 (Nitin)</option>
-                            <option value="102">Account 102 (Ansh)</option>
-                            <option value="103">Account 103 (Megha)</option>
-                        </select>
-                        <span class="arrow">➔</span>
-                        <select id="receiver-select" required>
-                            <option value="102">Account 102 (Ansh)</option>
-                            <option value="101">Account 101 (Nitin)</option>
-                            <option value="103">Account 103 (Megha)</option>
-                        </select>
-                    </div>
-                    <div class="form-row">
-                        <input type="number" id="transfer-amount" placeholder="Amount (₹)" value="2000" min="1" required>
-                        <button type="submit" class="btn btn-primary">Dispatch Thread</button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Thread Pool & Lock Monitor -->
-            <div class="panel">
-                <h2>Concurrency & Lock Monitor (OS Layer)</h2>
-                <div class="threads-monitor" id="threads-container">
-                    <!-- Populated via JS -->
-                </div>
-
-                <div class="lock-state-box">
-                    <h3>Critical Section Status</h3>
-                    <div class="lock-status" id="lock-indicator">
-                        <span class="lock-icon">🟢</span> Mutex Free (No active thread in critical section)
-                    </div>
-                </div>
-            </div>
+      <!-- Navigation Tree -->
+      <div class="flex-1 overflow-y-auto px-gutter-sm py-space-xs space-y-space-md">
+        <!-- 1. Core Pipeline -->
+        <div class="space-y-0.5">
+          <div class="px-space-sm py-space-xs font-label-caps text-label-caps text-outline uppercase tracking-wider">Core Pipeline</div>
+          <nav class="space-y-0.5" id="nav-core">
+            <a href="#overview" data-view="overview" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT transition-colors bg-surface-container text-primary font-semibold border-l-2 border-primary">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">terminal</span>
+                <span class="font-body-sm text-body-sm">Overview</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-outline">⌘1</span>
+            </a>
+            <a href="#transactions" data-view="transactions" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">sync_alt</span>
+                <span class="font-body-sm text-body-sm">Transactions</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-outline">⌘2</span>
+            </a>
+            <a href="#transaction-detail" data-view="transaction-detail" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">troubleshoot</span>
+                <span class="font-body-sm text-body-sm">Txn Inspector</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-outline">⌘3</span>
+            </a>
+            <a href="#accounts" data-view="accounts" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">account_balance</span>
+                <span class="font-body-sm text-body-sm">Accounts</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-outline">⌘4</span>
+            </a>
+          </nav>
         </div>
 
-        <!-- Transaction History Table -->
-        <section class="panel full-width">
-            <h2>Recent Transactions (DBMS Layer)</h2>
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Tx ID</th>
-                            <th>Sender</th>
-                            <th>Receiver</th>
-                            <th>Amount</th>
-                            <th>Status</th>
-                            <th>Timestamp</th>
-                        </tr>
-                    </thead>
-                    <tbody id="transactions-table-body">
-                        <!-- Populated via JS -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </div>
+        <!-- 2. Concurrency & Locks -->
+        <div class="space-y-0.5">
+          <div class="px-space-sm py-space-xs font-label-caps text-label-caps text-outline uppercase tracking-wider">Concurrency & Locks</div>
+          <nav class="space-y-0.5" id="nav-concurrency">
+            <a href="#concurrency" data-view="concurrency" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">memory</span>
+                <span class="font-body-sm text-body-sm">Thread Pool</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-outline">⌘5</span>
+            </a>
+            <a href="#lock-manager" data-view="lock-manager" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">lock</span>
+                <span class="font-body-sm text-body-sm">Lock Manager</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-outline">⌘6</span>
+            </a>
+            <a href="#deadlock-monitor" data-view="deadlock-monitor" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">hub</span>
+                <span class="font-body-sm text-body-sm">Deadlock Monitor</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-error bg-error-container/20 px-1 rounded" id="deadlock-badge">0</span>
+            </a>
+          </nav>
+        </div>
 
-    <script src="js/app.js"></script>
+        <!-- 3. Diagnostics & Runtime -->
+        <div class="space-y-0.5">
+          <div class="px-space-sm py-space-xs font-label-caps text-label-caps text-outline uppercase tracking-wider">Diagnostics & Runtime</div>
+          <nav class="space-y-0.5" id="nav-diagnostics">
+            <a href="#resources" data-view="resources" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">speed</span>
+                <span class="font-body-sm text-body-sm">OS Resources</span>
+              </div>
+            </a>
+            <a href="#system-logs" data-view="system-logs" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                <span class="font-body-sm text-body-sm">System Logs</span>
+              </div>
+            </a>
+            <a href="#analytics" data-view="analytics" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">query_stats</span>
+                <span class="font-body-sm text-body-sm">Analytics</span>
+              </div>
+            </a>
+            <a href="#system-health" data-view="system-health" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-[18px]">vital_signs</span>
+                <span class="font-body-sm text-body-sm">Engine Health</span>
+              </div>
+            </a>
+          </nav>
+        </div>
+      </div>
+
+      <!-- Bottom Telemetry & Engineer Profile -->
+      <div class="p-gutter-sm border-t border-surface-container bg-surface-container-lowest/80 space-y-space-xs flex-shrink-0">
+        <div class="p-space-xs rounded-DEFAULT bg-surface-container-low border border-surface-container space-y-1 font-code-sm text-code-sm text-outline">
+          <div class="flex items-center justify-between">
+            <span class="text-on-surface-variant">Workers:</span>
+            <span class="text-primary font-medium" id="side-workers-count">18 Active</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-on-surface-variant">Locks:</span>
+            <span class="text-secondary font-medium" id="side-locks-count">7 Mutex</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-on-surface-variant">Engine IPC:</span>
+            <span class="text-primary-container font-medium" id="side-ipc-status">ESTABLISHED</span>
+          </div>
+        </div>
+        <div class="flex items-center justify-between px-space-xs pt-space-xs border-t border-surface-container">
+          <div class="flex items-center gap-space-sm min-w-0">
+            <div class="w-6 h-6 rounded-DEFAULT bg-surface-container-high flex items-center justify-center font-code-sm text-code-sm text-primary font-semibold">NR</div>
+            <div class="truncate">
+              <div class="font-headline-sm text-body-sm font-medium text-on-surface leading-tight truncate">Nitin Rawat</div>
+              <div class="font-code-sm text-code-sm text-outline leading-tight truncate">Systems Eng</div>
+            </div>
+          </div>
+          <button id="config-settings-btn" class="text-on-surface-variant hover:text-on-surface transition-colors" title="Engine Settings">
+            <span class="material-symbols-outlined text-[18px]">settings</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==================== MAIN APPLICATION FRAME (pl-64) ==================== -->
+  <div class="pl-64 flex flex-col min-h-screen">
+    
+    <!-- Top Command Header (56px) -->
+    <header class="fixed top-0 left-64 right-0 h-14 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container z-40 px-gutter flex items-center justify-between">
+      <div class="flex items-center gap-space-md">
+        <div class="flex items-center gap-space-xs font-code-sm text-code-sm text-outline">
+          <span class="text-on-surface-variant">PAYLOCK</span>
+          <span>/</span>
+          <span class="text-on-surface font-medium" id="header-breadcrumb">ENGINE-CORE-01</span>
+        </div>
+        <div class="h-4 w-[1px] bg-surface-container"></div>
+        <div class="hidden lg:flex items-center gap-space-xs px-space-xs py-0.5 rounded-DEFAULT bg-surface-container text-primary font-code-sm text-code-sm border border-surface-container-high">
+          <span class="w-1.5 h-1.5 rounded-full bg-primary" id="header-cluster-dot"></span>
+          <span id="header-cluster-text">CLUSTER: STABLE • 4.2k TPS</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-space-md">
+        <!-- Global Search -->
+        <div class="relative w-80">
+          <span class="material-symbols-outlined absolute left-2.5 top-2 text-[18px] text-outline">search</span>
+          <input id="global-search-input" class="w-full h-8 pl-8 pr-12 rounded-DEFAULT bg-surface-container-low border border-surface-container text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary font-body-sm" placeholder="Search TXN, Thread, Lock, Account..." type="text"/>
+          <span class="absolute right-2 top-1.5 font-code-sm text-code-sm px-1 rounded bg-surface-container text-outline border border-surface-container-high">⌘K</span>
+        </div>
+        <!-- Quick Simulation & Actions -->
+        <div class="flex items-center gap-space-xs">
+          <button id="simulate-traffic-btn" class="h-8 px-space-sm rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-high flex items-center gap-1 font-label-md text-label-md transition-colors" title="Simulate Traffic">
+            <span class="material-symbols-outlined text-[16px] text-secondary">play_arrow</span>
+            <span>Simulate</span>
+          </button>
+          <button id="notifications-btn" class="relative p-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+            <span class="material-symbols-outlined text-[20px]">notifications</span>
+            <span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-surface-container-lowest"></span>
+          </button>
+          <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center font-bold text-on-primary">
+            <span class="material-symbols-outlined text-[18px]">person</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Master Viewport (pt-14) -->
+    <main class="flex-1 pt-14 w-full bg-background">
+      <div class="w-full px-gutter py-margin max-w-full">
+
+        <!-- ==================== VIEW 1: OVERVIEW ==================== -->
+        <section id="view-overview" class="app-view active-view space-y-space-xl">
+          <!-- Command Header & Operational Telemetry Strip -->
+          <div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
+            <div>
+              <div class="flex items-center gap-space-xs font-label-caps text-label-caps text-primary tracking-widest uppercase">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></span>
+                <span>TELEMETRY STREAM: RUNTIME ACTIVE</span>
+              </div>
+              <h1 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight mt-0.5">System Overview</h1>
+              <p class="font-body-md text-body-md text-outline mt-0.5">Real-time payment transaction, thread pool, and concurrency lock orchestration</p>
+            </div>
+            <!-- Engine Clock & Sync Action -->
+            <div class="flex items-center gap-space-sm bg-surface-container-low px-space-md py-space-xs rounded-xl shadow-sm">
+              <div class="flex items-center gap-space-xs text-on-surface-variant font-code-sm text-code-sm">
+                <span class="material-symbols-outlined text-[16px] text-primary">memory</span>
+                <span>POSIX THREADS: ACTIVE</span>
+              </div>
+              <div class="w-1 h-1 rounded-full bg-surface-container-highest"></div>
+              <div class="flex items-center gap-space-xs font-code-sm text-code-sm text-primary">
+                <span class="material-symbols-outlined text-[16px]">timer</span>
+                <span id="uptime-clock">04h 12m 44s</span>
+              </div>
+              <div class="w-1 h-1 rounded-full bg-surface-container-highest"></div>
+              <button id="sync-state-btn" class="bg-primary-container hover:bg-primary text-on-primary-container hover:text-on-primary px-space-sm py-1 rounded-DEFAULT font-label-md text-label-md font-semibold transition-all flex items-center gap-1 shadow-sm">
+                <span class="material-symbols-outlined text-[14px]">refresh</span>
+                <span>Sync State</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 8 High-Density Technical KPI Cards (Bento Metric Strip) -->
+          <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-space-sm">
+            <!-- 1. Total Transactions -->
+            <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-space-sm rounded-xl flex flex-col justify-between shadow-sm relative overflow-hidden group">
+              <div class="flex items-center justify-between text-outline">
+                <span class="font-label-caps text-label-caps tracking-wider uppercase">Total Txn</span>
+                <span class="font-code-sm text-code-sm text-primary" id="kpi-total-delta">+8.4%</span>
+              </div>
+              <div class="my-space-xs">
+                <div class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight" id="kpi-total-val">12,482</div>
+                <div class="font-code-sm text-code-sm text-on-surface-variant">Today total</div>
+              </div>
+              <div class="w-full h-5 mt-1">
+                <svg class="w-full h-full text-primary" fill="none" preserveAspectRatio="none" viewBox="0 0 100 20">
+                  <path d="M0 16 L15 14 L30 15 L45 8 L60 11 L75 4 L90 7 L100 2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+                </svg>
+              </div>
+            </div>
+
+            <!-- 2. Committed Transactions -->
+            <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-space-sm rounded-xl flex flex-col justify-between shadow-sm">
+              <div class="flex items-center justify-between text-outline">
+                <span class="font-label-caps text-label-caps tracking-wider uppercase">Committed</span>
+                <span class="px-1 py-0.5 rounded-DEFAULT bg-primary/10 text-primary font-code-sm text-code-sm" id="kpi-committed-pct">97.8%</span>
+              </div>
+              <div class="my-space-xs">
+                <div class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight" id="kpi-committed-val">12,210</div>
+                <div class="font-code-sm text-code-sm text-outline">Commit rate high</div>
+              </div>
+              <div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+                <div class="bg-primary h-full rounded-full" id="kpi-committed-bar" style="width: 97.8%"></div>
+              </div>
+            </div>
+
+            <!-- 3. Rolled Back Transactions -->
+            <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-space-sm rounded-xl flex flex-col justify-between shadow-sm">
+              <div class="flex items-center justify-between text-outline">
+                <span class="font-label-caps text-label-caps tracking-wider uppercase">Rolled Back</span>
+                <span class="px-1 py-0.5 rounded-DEFAULT bg-error-container/40 text-error font-code-sm text-code-sm" id="kpi-rollback-pct">2.2%</span>
+              </div>
+              <div class="my-space-xs">
+                <div class="font-headline-lg text-headline-lg font-bold text-error tracking-tight" id="kpi-rollback-val">272</div>
+                <div class="font-code-sm text-code-sm text-on-error-container">ACID rollbacks</div>
+              </div>
+              <div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+                <div class="bg-error h-full rounded-full" id="kpi-rollback-bar" style="width: 2.2%"></div>
+              </div>
+            </div>
+
+            <!-- 4. Active Pthreads -->
+            <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-space-sm rounded-xl flex flex-col justify-between shadow-sm">
+              <div class="flex items-center justify-between text-outline">
+                <span class="font-label-caps text-label-caps tracking-wider uppercase">Pthreads</span>
+                <span class="font-code-sm text-code-sm text-secondary" id="kpi-pool-size">pool: 24</span>
+              </div>
+              <div class="my-space-xs">
+                <div class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight" id="kpi-threads-val">18</div>
+                <div class="font-code-sm text-code-sm text-outline"><span class="text-secondary font-medium" id="kpi-threads-running">15 run</span> / 3 wait</div>
+              </div>
+              <div class="flex gap-0.5 w-full h-1">
+                <div class="bg-secondary h-full rounded-DEFAULT" style="width: 65%"></div>
+                <div class="bg-tertiary h-full rounded-DEFAULT" style="width: 20%"></div>
+                <div class="bg-surface-container-highest h-full rounded-DEFAULT" style="width: 15%"></div>
+              </div>
+            </div>
+
+            <!-- 5. 2PL Locks -->
+            <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-space-sm rounded-xl flex flex-col justify-between shadow-sm">
+              <div class="flex items-center justify-between text-outline">
+                <span class="font-label-caps text-label-caps tracking-wider uppercase">2PL Locks</span>
+                <span class="font-code-sm text-code-sm text-primary" id="kpi-queued-locks">2 queued</span>
+              </div>
+              <div class="my-space-xs">
+                <div class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight" id="kpi-locks-val">7</div>
+                <div class="font-code-sm text-code-sm text-outline">5 exclusive · 2 shr</div>
+              </div>
+              <div class="flex items-center gap-1 font-code-sm text-code-sm text-primary">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                <span>Mutex Active</span>
+              </div>
+            </div>
+
+            <!-- 6. Deadlocks Detected -->
+            <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-space-sm rounded-xl flex flex-col justify-between shadow-sm relative">
+              <div class="flex items-center justify-between text-outline">
+                <span class="font-label-caps text-label-caps tracking-wider uppercase">Deadlocks</span>
+                <span class="px-1 py-0.5 rounded-DEFAULT bg-tertiary/15 text-tertiary font-code-sm text-code-sm">CYCLE</span>
+              </div>
+              <div class="my-space-xs">
+                <div class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight" id="kpi-deadlocks-val">2</div>
+                <div class="font-code-sm text-code-sm text-outline">1 resolved · 1 pvt</div>
+              </div>
+              <div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+                <div class="bg-tertiary h-full rounded-full" style="width: 15%"></div>
+              </div>
+            </div>
+
+            <!-- 7. Simulated Memory Frames -->
+            <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-space-sm rounded-xl flex flex-col justify-between shadow-sm">
+              <div class="flex items-center justify-between text-outline">
+                <span class="font-label-caps text-label-caps tracking-wider uppercase">Frame Cache</span>
+                <span class="font-code-sm text-code-sm text-secondary">LRU Paging</span>
+              </div>
+              <div class="my-space-xs">
+                <div class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight" id="kpi-paging-val">64</div>
+                <div class="font-code-sm text-code-sm text-outline">98.2% Hit Ratio</div>
+              </div>
+              <div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+                <div class="bg-secondary h-full rounded-full" style="width: 98.2%"></div>
+              </div>
+            </div>
+
+            <!-- 8. Execution Latency -->
+            <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-space-sm rounded-xl flex flex-col justify-between shadow-sm">
+              <div class="flex items-center justify-between text-outline">
+                <span class="font-label-caps text-label-caps tracking-wider uppercase">Avg Latency</span>
+                <span class="font-code-sm text-code-sm text-primary">p99: 18.2ms</span>
+              </div>
+              <div class="my-space-xs">
+                <div class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight" id="kpi-latency-val">12.4ms</div>
+                <div class="font-code-sm text-code-sm text-outline">InnoDB WAL fsync</div>
+              </div>
+              <div class="flex items-center gap-1 font-code-sm text-code-sm text-primary">
+                <span class="material-symbols-outlined text-[14px]">bolt</span>
+                <span>Real-time</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mid Section: Concurrency Map & Lock Heatmap -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-space-lg">
+            <!-- Left: Concurrency Lock & Dependency Heatmap (2 Cols) -->
+            <div class="lg:col-span-2 bg-surface-container-lowest rounded-xl p-space-lg border border-surface-container flex flex-col gap-space-md">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-space-sm">
+                  <span class="material-symbols-outlined text-primary text-[20px]">account_tree</span>
+                  <div>
+                    <h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">2PL Concurrency & Mutex Contention Map</h2>
+                    <p class="font-code-sm text-code-sm text-outline">Real-time lock distribution across active database account mutexes</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-space-sm text-code-sm font-code-sm">
+                  <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-primary"></span> Exclusive (Write)</span>
+                  <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-secondary"></span> Shared (Read)</span>
+                  <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-error"></span> Contention</span>
+                </div>
+              </div>
+
+              <!-- Concurrency Heatmap Grid -->
+              <div class="grid grid-cols-3 md:grid-cols-6 gap-space-sm p-space-sm bg-surface-container-low rounded-DEFAULT">
+                <div class="p-space-sm rounded-DEFAULT bg-surface-container border border-primary/30 flex flex-col gap-1">
+                  <span class="font-code-sm text-code-sm text-outline">ACC-101</span>
+                  <span class="font-code-sm text-code-sm text-primary font-semibold">EXCLUSIVE</span>
+                  <span class="font-label-caps text-label-caps text-on-surface-variant">Holder: TXN-10485</span>
+                </div>
+                <div class="p-space-sm rounded-DEFAULT bg-surface-container border border-primary/30 flex flex-col gap-1">
+                  <span class="font-code-sm text-code-sm text-outline">ACC-102</span>
+                  <span class="font-code-sm text-code-sm text-primary font-semibold">EXCLUSIVE</span>
+                  <span class="font-label-caps text-label-caps text-on-surface-variant">Holder: TXN-10485</span>
+                </div>
+                <div class="p-space-sm rounded-DEFAULT bg-surface-container border border-secondary/30 flex flex-col gap-1">
+                  <span class="font-code-sm text-code-sm text-outline">ACC-103</span>
+                  <span class="font-code-sm text-code-sm text-secondary font-semibold">SHARED</span>
+                  <span class="font-label-caps text-label-caps text-on-surface-variant">Holder: TXN-10483</span>
+                </div>
+                <div class="p-space-sm rounded-DEFAULT bg-surface-container border border-error/40 flex flex-col gap-1">
+                  <span class="font-code-sm text-code-sm text-outline">ACC-104</span>
+                  <span class="font-code-sm text-code-sm text-error font-semibold">WAIT QUEUE (1)</span>
+                  <span class="font-label-caps text-label-caps text-error">TXN-10482 WAITING</span>
+                </div>
+                <div class="p-space-sm rounded-DEFAULT bg-surface-container border border-surface-container-high flex flex-col gap-1">
+                  <span class="font-code-sm text-code-sm text-outline">ACC-105</span>
+                  <span class="font-code-sm text-code-sm text-outline font-semibold">FREE</span>
+                  <span class="font-label-caps text-label-caps text-outline">No Active Lock</span>
+                </div>
+                <div class="p-space-sm rounded-DEFAULT bg-surface-container border border-surface-container-high flex flex-col gap-1">
+                  <span class="font-code-sm text-code-sm text-outline">ACC-106</span>
+                  <span class="font-code-sm text-code-sm text-outline font-semibold">FREE</span>
+                  <span class="font-label-caps text-label-caps text-outline">No Active Lock</span>
+                </div>
+              </div>
+
+              <!-- Lock Manager Telemetry Status Bar -->
+              <div class="flex items-center justify-between p-space-sm bg-surface-container rounded-DEFAULT font-code-sm text-code-sm">
+                <div class="flex items-center gap-space-md">
+                  <span class="text-on-surface-variant">Protocol: <span class="text-on-surface font-semibold">Rigorous 2PL (Strict Phase)</span></span>
+                  <span class="text-on-surface-variant">Isolation: <span class="text-primary font-semibold">SERIALIZABLE</span></span>
+                </div>
+                <div class="flex items-center gap-space-sm text-outline">
+                  <span>Deadlock Detector: <span class="text-primary font-medium">DFS Cycle Probe Active</span></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Account Balances Snapshot (1 Col) -->
+            <div class="bg-surface-container-lowest rounded-xl p-space-lg border border-surface-container flex flex-col gap-space-md">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-space-sm">
+                  <span class="material-symbols-outlined text-secondary text-[20px]">account_balance</span>
+                  <h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">MySQL Account State</h2>
+                </div>
+                <button class="text-primary font-code-sm text-code-sm hover:underline" id="view-all-accounts-btn">View All</button>
+              </div>
+              <div class="space-y-space-xs" id="overview-accounts-list">
+                <!-- Populated via JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom: Recent Transactions Feed Table -->
+          <div class="bg-surface-container-lowest rounded-xl p-space-lg border border-surface-container flex flex-col gap-space-md">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-primary text-[20px]">receipt_long</span>
+                <div>
+                  <h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Live Transaction Ingestion Feed</h2>
+                  <p class="font-code-sm text-code-sm text-outline">Latest atomic transfers processed by the C++ engine</p>
+                </div>
+              </div>
+              <button class="text-primary font-code-sm text-code-sm hover:underline flex items-center gap-1" id="view-all-txns-btn">
+                <span>View Full Audit Log</span>
+                <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+              </button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left font-body-sm text-body-sm">
+                <thead>
+                  <tr class="border-b border-surface-container font-label-caps text-label-caps text-outline uppercase tracking-wider">
+                    <th class="py-2 px-3">TXN Hash</th>
+                    <th class="py-2 px-3">Timestamp</th>
+                    <th class="py-2 px-3">Source Account</th>
+                    <th class="py-2 px-3">Destination Account</th>
+                    <th class="py-2 px-3">Amount</th>
+                    <th class="py-2 px-3">Lock Mode</th>
+                    <th class="py-2 px-3">Worker</th>
+                    <th class="py-2 px-3">Status</th>
+                    <th class="py-2 px-3 text-right">Inspect</th>
+                  </tr>
+                </thead>
+                <tbody id="overview-txns-table" class="divide-y divide-surface-container/40">
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW 2: TRANSACTIONS ==================== -->
+        <section id="view-transactions" class="app-view space-y-space-xl">
+          <!-- Command Header -->
+          <div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
+            <div>
+              <div class="flex items-center gap-space-xs font-label-caps text-label-caps text-primary tracking-widest uppercase">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                <span>AUDIT TRAIL • INNODB WAL VERIFIED</span>
+              </div>
+              <h1 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight mt-0.5">Transactions Monitor</h1>
+              <p class="font-body-md text-body-md text-outline mt-0.5">Filter, audit, and inspect concurrent ACID transactions and deadlock recoveries</p>
+            </div>
+            <div class="flex items-center gap-space-sm">
+              <button id="transactions-export-btn" class="bg-surface-container hover:bg-surface-container-high text-on-surface px-space-md py-1.5 rounded-DEFAULT font-label-md text-label-md border border-surface-container-high flex items-center gap-1 transition-colors">
+                <span class="material-symbols-outlined text-[16px]">download</span>
+                <span>Export CSV</span>
+              </button>
+              <button id="transactions-new-btn" class="bg-primary-container hover:bg-primary text-on-primary-container hover:text-on-primary px-space-md py-1.5 rounded-DEFAULT font-label-md text-label-md font-semibold transition-colors flex items-center gap-1 shadow-sm">
+                <span class="material-symbols-outlined text-[16px]">add</span>
+                <span>New Transfer</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Filter & Search Controls Strip -->
+          <div class="bg-surface-container-low p-space-md rounded-xl space-y-space-sm shadow-sm border border-surface-container">
+            <!-- Row 1: Search & Dropdowns -->
+            <div class="flex flex-col md:flex-row items-center gap-space-md">
+              <div class="relative flex-1 w-full">
+                <span class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline">search</span>
+                <input id="txns-search-input" class="w-full h-9 pl-9 pr-4 rounded-DEFAULT bg-surface-container border border-surface-container-high text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary font-body-sm" placeholder="Filter by TXN hash, account ID, or worker..." type="text"/>
+              </div>
+              <div class="flex items-center gap-space-sm w-full md:w-auto">
+                <select id="txns-lock-filter" class="h-9 px-space-sm rounded-DEFAULT bg-surface-container border border-surface-container-high font-code-sm text-code-sm text-on-surface focus:outline-none focus:border-primary">
+                  <option value="">All Locks</option>
+                  <option value="EXCLUSIVE">EXCLUSIVE (2PL)</option>
+                  <option value="SHARED">SHARED</option>
+                </select>
+                <button id="txns-refresh-btn" class="h-9 px-space-sm rounded-DEFAULT bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface flex items-center gap-1 font-code-sm text-code-sm transition-colors">
+                  <span class="material-symbols-outlined text-[16px]">refresh</span>
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Row 2: Status Pills Filter (Exact Stitch Design) -->
+            <div class="flex items-center gap-space-xs overflow-x-auto pt-1 pb-0.5" id="txns-status-pills">
+              <span class="font-label-caps text-label-caps text-outline uppercase mr-1 flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px]">filter_alt</span>
+                State:
+              </span>
+              <button data-status="All" class="status-pill flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-primary text-on-primary font-headline-sm text-label-md font-medium">
+                <span>All</span>
+                <span class="font-code-sm text-code-sm px-1 rounded bg-on-primary/20" id="pill-count-all">12,482</span>
+              </button>
+              <button data-status="COMMITTED" class="status-pill flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-label-md transition-colors">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                <span>Committed</span>
+                <span class="font-code-sm text-code-sm text-outline" id="pill-count-committed">12,210</span>
+              </button>
+              <button data-status="PROCESSING" class="status-pill flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-label-md transition-colors">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
+                <span>Processing</span>
+                <span class="font-code-sm text-code-sm text-outline" id="pill-count-processing">14</span>
+              </button>
+              <button data-status="WAITING" class="status-pill flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-label-md transition-colors">
+                <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                <span>Waiting</span>
+                <span class="font-code-sm text-code-sm text-secondary font-medium" id="pill-count-waiting">6</span>
+              </button>
+              <button data-status="ROLLED_BACK" class="status-pill flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-label-md transition-colors">
+                <span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+                <span>Rolled Back</span>
+                <span class="font-code-sm text-code-sm text-outline" id="pill-count-rolledback">218</span>
+              </button>
+              <button data-status="DEADLOCK" class="status-pill flex items-center gap-1.5 px-space-sm py-1 rounded-DEFAULT bg-error-container/30 hover:bg-error-container/50 text-error font-headline-sm text-label-md transition-colors">
+                <span class="w-1.5 h-1.5 rounded-full bg-error animate-ping"></span>
+                <span>Failed / Deadlock</span>
+                <span class="font-code-sm text-code-sm px-1 rounded bg-error-container text-on-error" id="pill-count-deadlock">54</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Dense Production Data Table Card -->
+          <div class="bg-surface-container-lowest rounded-xl shadow-md border border-surface-container overflow-hidden flex flex-col">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left font-body-sm text-body-sm">
+                <thead class="bg-surface-container-low border-b border-surface-container">
+                  <tr class="font-label-caps text-label-caps text-outline uppercase tracking-wider">
+                    <th class="py-2.5 px-4">TXN Hash</th>
+                    <th class="py-2.5 px-4">Timestamp</th>
+                    <th class="py-2.5 px-4">Sender (Src)</th>
+                    <th class="py-2.5 px-4">Receiver (Dst)</th>
+                    <th class="py-2.5 px-4">Amount (USD)</th>
+                    <th class="py-2.5 px-4">Lock Mode</th>
+                    <th class="py-2.5 px-4">Worker</th>
+                    <th class="py-2.5 px-4">Latency</th>
+                    <th class="py-2.5 px-4">Status</th>
+                    <th class="py-2.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="txns-table-body" class="divide-y divide-surface-container/50">
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Table Pagination Footer -->
+            <div class="p-space-md border-t border-surface-container flex items-center justify-between text-code-sm font-code-sm text-outline bg-surface-container-lowest">
+              <div class="flex items-center gap-space-sm">
+                <span>Showing <span class="text-on-surface font-semibold" id="table-showing-range">1-8</span> of <span class="text-on-surface font-semibold" id="table-total-count">12,482</span> records</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <button class="px-2 py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface disabled:opacity-40" id="txns-prev-btn" disabled>Prev</button>
+                <span class="px-2 py-1 text-on-surface font-medium">1</span>
+                <button class="px-2 py-1 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface" id="txns-next-btn">Next</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW 3: CONCURRENCY & THREAD POOL ==================== -->
+        <section id="view-concurrency" class="app-view space-y-space-xl">
+          <!-- Command Header -->
+          <div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
+            <div>
+              <div class="flex items-center gap-space-xs font-label-caps text-label-caps text-primary tracking-widest uppercase">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                <span>SCHEDULER & MUTEX ORCHESTRATION</span>
+              </div>
+              <h1 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight mt-0.5">Concurrency Monitor & Thread Pool</h1>
+              <p class="font-body-md text-body-md text-outline mt-0.5">Interactive trace of pthread workers, 2PL contention, and WFG cycle resolution</p>
+            </div>
+            <div class="flex items-center gap-space-sm">
+              <span class="font-code-sm text-code-sm text-secondary bg-surface-container px-2 py-1 rounded-DEFAULT border border-surface-container-high">
+                Pool Size: 24 POSIX Workers
+              </span>
+            </div>
+          </div>
+
+          <!-- Section 1: Thread Pool Pipeline Visualization Board (Stitch Vector Board) -->
+          <div class="rounded-xl bg-surface-container-lowest p-space-lg border border-surface-container flex flex-col gap-space-md shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-space-xs gap-space-sm border-b border-surface-container/60">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-primary text-[20px]">account_tree</span>
+                <div>
+                  <h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold tracking-tight">Thread Pool Pipeline Visualization</h2>
+                  <p class="font-code-sm text-code-sm text-outline">Live scheduler trace showing synchronous state progression and mutex lock dependencies</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-space-md text-code-sm font-code-sm text-on-surface-variant flex-wrap">
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-primary inline-block animate-pulse"></span> Running</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-tertiary inline-block"></span> Mutex Wait</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-secondary inline-block"></span> Committed</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-error inline-block"></span> Deadlock Victim</span>
+              </div>
+            </div>
+
+            <!-- Vector Flow Visual Board Container -->
+            <div class="bg-surface-container-low rounded-DEFAULT p-space-md flex flex-col gap-space-sm overflow-x-auto" id="thread-pipeline-board">
+              <!-- Dynamically populated or rendered with default workers -->
+            </div>
+          </div>
+
+          <!-- Section 2: Active 2PL Locks & Wait-For Graph (Cycle Analysis) -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
+            <!-- Active Locks Snapshot -->
+            <div class="bg-surface-container-lowest rounded-xl p-space-lg border border-surface-container flex flex-col gap-space-md">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-space-sm">
+                  <span class="material-symbols-outlined text-secondary text-[20px]">lock</span>
+                  <h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Active 2PL Lock Table</h2>
+                </div>
+                <span class="font-code-sm text-code-sm text-outline" id="active-locks-count">4 Locks Tracked</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left font-body-sm text-body-sm">
+                  <thead>
+                    <tr class="font-label-caps text-label-caps text-outline uppercase border-b border-surface-container">
+                      <th class="py-2 px-3">Resource</th>
+                      <th class="py-2 px-3">Mode</th>
+                      <th class="py-2 px-3">Holder TXN</th>
+                      <th class="py-2 px-3">Waiters</th>
+                      <th class="py-2 px-3">Acquired At</th>
+                    </tr>
+                  </thead>
+                  <tbody id="locks-table-body" class="divide-y divide-surface-container/50">
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Wait-For Graph (WFG) & Cycle Detection -->
+            <div class="bg-surface-container-lowest rounded-xl p-space-lg border border-surface-container flex flex-col gap-space-md">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-space-sm">
+                  <span class="material-symbols-outlined text-tertiary text-[20px]">hub</span>
+                  <div>
+                    <h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Wait-For Graph & Cycle Probe</h2>
+                    <p class="font-code-sm text-code-sm text-outline">DFS dependency edges: Ti waits on Tj</p>
+                  </div>
+                </div>
+                <div id="wfg-cycle-pill" class="px-2 py-0.5 rounded-DEFAULT bg-tertiary/20 text-tertiary font-code-sm text-code-sm border border-tertiary/30">
+                  CYCLE DETECTED
+                </div>
+              </div>
+
+              <!-- Visual Graph Edge Box -->
+              <div class="p-space-md rounded-DEFAULT bg-surface-container-low border border-surface-container space-y-space-sm">
+                <div class="font-code-sm text-code-sm text-outline">Active Dependency Edges:</div>
+                <div class="space-y-1 font-code-sm text-code-sm" id="wfg-edges-list">
+                  <div class="p-2 rounded bg-surface-container flex items-center justify-between">
+                    <span class="text-on-surface">TXN-10482 ───waits for ACC-101───► TXN-10485</span>
+                    <span class="text-primary font-medium">GRANTED</span>
+                  </div>
+                  <div class="p-2 rounded bg-surface-container flex items-center justify-between">
+                    <span class="text-on-surface">TXN-10480 ───waits for ACC-104───► TXN-10482</span>
+                    <span class="text-secondary font-medium">QUEUED</span>
+                  </div>
+                  <div class="p-2 rounded bg-error-container/20 border border-error/30 flex items-center justify-between text-error">
+                    <span class="font-bold">TXN-10485 ───waits for ACC-103───► TXN-10480 [CYCLE EDGE]</span>
+                    <span class="px-1 bg-error-container text-on-error rounded">DEADLOCK</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Victim Selection Resolution -->
+              <div class="p-space-sm rounded-DEFAULT bg-surface-container border border-surface-container-high flex items-center justify-between font-code-sm text-code-sm">
+                <div>
+                  <span class="text-outline">Recovery Victim: </span>
+                  <span class="text-error font-bold" id="wfg-victim-txn">TXN-10480</span>
+                </div>
+                <div class="text-right">
+                  <span class="text-outline">Algorithm: </span>
+                  <span class="text-on-surface">Youngest Txn / Min Locks</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Deadlock Recovery History Audit -->
+          <div class="bg-surface-container-lowest rounded-xl p-space-lg border border-surface-container flex flex-col gap-space-md shadow-sm">
+            <div class="flex items-center gap-space-sm">
+              <span class="material-symbols-outlined text-error text-[20px]">shield_with_heart</span>
+              <div>
+                <h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Deadlock Recovery Audit History</h2>
+                <p class="font-code-sm text-code-sm text-outline">Safe aborts, database rollbacks, and mutex unlock telemetry</p>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left font-body-sm text-body-sm">
+                <thead>
+                  <tr class="font-label-caps text-label-caps text-outline uppercase border-b border-surface-container">
+                    <th class="py-2 px-3">Recovery ID</th>
+                    <th class="py-2 px-3">Timestamp</th>
+                    <th class="py-2 px-3">Victim Txn</th>
+                    <th class="py-2 px-3">Detected Cycle</th>
+                    <th class="py-2 px-3">Action</th>
+                    <th class="py-2 px-3">Locks Released</th>
+                    <th class="py-2 px-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="recovery-table-body" class="divide-y divide-surface-container/50">
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW 4: TRANSACTION INSPECTOR ==================== -->
+        <section id="view-transaction-detail" class="app-view space-y-space-xl">
+          <!-- Command Header & Breadcrumb -->
+          <div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
+            <div>
+              <div class="flex items-center gap-space-xs font-code-sm text-code-sm text-outline mb-1">
+                <a href="#transactions" class="text-primary hover:underline">TRANSACTIONS</a>
+                <span>/</span>
+                <span class="text-on-surface" id="detail-breadcrumb-id">TXN-10485</span>
+              </div>
+              <div class="flex items-center gap-space-sm">
+                <h1 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight" id="detail-title">Transaction Inspector</h1>
+                <span class="px-2 py-0.5 rounded-DEFAULT bg-primary/10 text-primary font-code-sm text-code-sm border border-primary/20" id="detail-status-badge">COMMITTED</span>
+              </div>
+              <p class="font-code-sm text-code-sm text-outline mt-1" id="detail-hash-string">Hash: 0x7f9a2b84c01d9f8e331b2c4e • Thread: Worker T-01</p>
+            </div>
+            <div class="flex items-center gap-space-sm">
+              <button class="bg-surface-container hover:bg-surface-container-high text-on-surface px-space-md py-1.5 rounded-DEFAULT font-label-md text-label-md border border-surface-container-high flex items-center gap-1 transition-colors" id="detail-back-btn">
+                <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+                <span>Back to List</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ACID Verification Badges Bar -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-space-sm">
+            <div class="p-space-sm rounded-DEFAULT bg-surface-container-low border border-surface-container flex flex-col gap-1">
+              <div class="flex items-center justify-between">
+                <span class="font-label-caps text-label-caps text-outline uppercase">Atomicity (A)</span>
+                <span class="material-symbols-outlined text-primary text-[16px]">verified</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-primary font-semibold">ALL WAL LOGGED</span>
+              <span class="font-code-sm text-code-sm text-outline">InnoDB redo fsynced</span>
+            </div>
+            <div class="p-space-sm rounded-DEFAULT bg-surface-container-low border border-surface-container flex flex-col gap-1">
+              <div class="flex items-center justify-between">
+                <span class="font-label-caps text-label-caps text-outline uppercase">Consistency (C)</span>
+                <span class="material-symbols-outlined text-primary text-[16px]">verified</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-primary font-semibold">INVARIANT VERIFIED</span>
+              <span class="font-code-sm text-code-sm text-outline">Sum(Balances) maintained</span>
+            </div>
+            <div class="p-space-sm rounded-DEFAULT bg-surface-container-low border border-surface-container flex flex-col gap-1">
+              <div class="flex items-center justify-between">
+                <span class="font-label-caps text-label-caps text-outline uppercase">Isolation (I)</span>
+                <span class="material-symbols-outlined text-secondary text-[16px]">verified</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-secondary font-semibold">SERIALIZABLE</span>
+              <span class="font-code-sm text-code-sm text-outline">Strict Rigorous 2PL</span>
+            </div>
+            <div class="p-space-sm rounded-DEFAULT bg-surface-container-low border border-surface-container flex flex-col gap-1">
+              <div class="flex items-center justify-between">
+                <span class="font-label-caps text-label-caps text-outline uppercase">Durability (D)</span>
+                <span class="material-symbols-outlined text-primary text-[16px]">verified</span>
+              </div>
+              <span class="font-code-sm text-code-sm text-primary font-semibold">DURABLE COMMIT</span>
+              <span class="font-code-sm text-code-sm text-outline">MySQL Engine Confirmed</span>
+            </div>
+          </div>
+
+          <!-- Microsecond Latency Breakdown Bar (Stitch Design) -->
+          <div class="bg-surface-container-lowest p-space-lg rounded-xl border border-surface-container flex flex-col gap-space-md shadow-sm">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Latency Breakdown</span>
+                <h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Microsecond Execution Profile</h3>
+              </div>
+              <span class="font-code-md text-code-md font-semibold text-primary" id="detail-total-latency">124 ms TOTAL</span>
+            </div>
+            
+            <!-- Latency Stacked Bar -->
+            <div class="w-full h-3 bg-surface-container rounded-DEFAULT flex overflow-hidden">
+              <div class="h-full bg-outline" style="width: 9.6%;" title="Queue: 12ms"></div>
+              <div class="h-full bg-tertiary" style="width: 3.2%;" title="Mutex: 4ms"></div>
+              <div class="h-full bg-primary" style="width: 71.0%;" title="Execution: 88ms"></div>
+              <div class="h-full bg-secondary" style="width: 16.2%;" title="WAL Flush: 20ms"></div>
+            </div>
+
+            <!-- Metric Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-space-sm font-code-sm text-code-sm">
+              <div class="p-space-xs rounded-DEFAULT bg-surface-container flex justify-between items-center">
+                <span class="flex items-center gap-1 text-outline"><span class="w-2 h-2 rounded-full bg-outline"></span> Queue:</span>
+                <span class="text-on-surface font-medium" id="lat-queue">12ms</span>
+              </div>
+              <div class="p-space-xs rounded-DEFAULT bg-surface-container flex justify-between items-center">
+                <span class="flex items-center gap-1 text-outline"><span class="w-2 h-2 rounded-full bg-tertiary"></span> Mutex Wait:</span>
+                <span class="text-tertiary font-medium" id="lat-mutex">4ms</span>
+              </div>
+              <div class="p-space-xs rounded-DEFAULT bg-surface-container flex justify-between items-center">
+                <span class="flex items-center gap-1 text-outline"><span class="w-2 h-2 rounded-full bg-primary"></span> Execution:</span>
+                <span class="text-primary font-medium" id="lat-exec">88ms</span>
+              </div>
+              <div class="p-space-xs rounded-DEFAULT bg-surface-container flex justify-between items-center">
+                <span class="flex items-center gap-1 text-outline"><span class="w-2 h-2 rounded-full bg-secondary"></span> WAL Flush:</span>
+                <span class="text-secondary font-medium" id="lat-wal">20ms</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom: Locks Held & Account Balance Diffs -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
+            <!-- Account Balance Diff -->
+            <div class="bg-surface-container-lowest p-space-lg rounded-xl border border-surface-container flex flex-col gap-space-md">
+              <div class="flex items-center justify-between">
+                <span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Account State Diffs</span>
+                <span class="font-code-sm text-code-sm text-outline">Atomic Transfer Impact</span>
+              </div>
+              <div class="space-y-space-xs font-code-sm text-code-sm" id="detail-balance-diffs">
+                <div class="p-space-sm rounded-DEFAULT bg-surface-container-low border border-surface-container flex items-center justify-between">
+                  <div>
+                    <div class="text-on-surface font-medium">Source: Account 101 (Alice)</div>
+                    <div class="text-outline text-[11px]">$10,650.00 ➔ $9,400.00</div>
+                  </div>
+                  <span class="text-error font-bold text-headline-sm">-$1,250.00</span>
+                </div>
+                <div class="p-space-sm rounded-DEFAULT bg-surface-container-low border border-surface-container flex items-center justify-between">
+                  <div>
+                    <div class="text-on-surface font-medium">Destination: Account 102 (Bob)</div>
+                    <div class="text-outline text-[11px]">$4,350.00 ➔ $5,600.00</div>
+                  </div>
+                  <span class="text-primary font-bold text-headline-sm">+$1,250.00</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- SQL & Engine Execution Trace -->
+            <div class="bg-surface-container-lowest p-space-lg rounded-xl border border-surface-container flex flex-col gap-space-md">
+              <div class="flex items-center justify-between">
+                <span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Execution Timeline & SQL Trace</span>
+                <span class="font-code-sm text-code-sm text-primary font-mono">SERIALIZABLE</span>
+              </div>
+              <div class="bg-surface-container-low p-space-sm rounded-DEFAULT font-code-sm text-code-sm text-on-surface-variant space-y-1.5 max-h-56 overflow-y-auto" id="detail-sql-trace">
+                <div>10:42:18.420 [BEGIN TRANSACTION ID=10485]</div>
+                <div>10:42:18.421 [ACQUIRE EXCLUSIVE LOCK ON ACC-101] ➔ GRANTED</div>
+                <div>10:42:18.422 [ACQUIRE EXCLUSIVE LOCK ON ACC-102] ➔ GRANTED</div>
+                <div>10:42:18.435 [UPDATE accounts SET balance = balance - 1250.00 WHERE account_id = 101]</div>
+                <div>10:42:18.470 [UPDATE accounts SET balance = balance + 1250.00 WHERE account_id = 102]</div>
+                <div>10:42:18.510 [INSERT INTO transactions (from_acc, to_acc, amount, status) VALUES (101, 102, 1250.00, 'COMMITTED')]</div>
+                <div>10:42:18.540 [COMMIT TRANSACTION ID=10485] ➔ WAL FSYNC SUCCESS</div>
+                <div>10:42:18.544 [RELEASE ALL LOCKS FOR TXN 10485] ➔ FREED</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW 5: OS RESOURCES & PAGING ==================== -->
+        <section id="view-resources" class="app-view space-y-space-xl">
+          <div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
+            <div>
+              <div class="flex items-center gap-space-xs font-label-caps text-label-caps text-primary tracking-widest uppercase">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                <span>OS RESOURCE MANAGEMENT & PAGING</span>
+              </div>
+              <h1 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight mt-0.5">OS Resources & LRU Paging</h1>
+              <p class="font-body-md text-body-md text-outline mt-0.5">Simulated operating system paging tables, buffer pool frames, and capacity management</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-space-lg">
+            <div class="bg-surface-container-lowest p-space-lg rounded-xl border border-surface-container flex flex-col gap-space-md">
+              <h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">LRU Page Replacement</h3>
+              <div class="space-y-space-xs font-code-sm text-code-sm text-outline">
+                <div class="flex justify-between py-1 border-b border-surface-container"><span>Total References:</span> <span class="text-on-surface font-medium" id="res-refs">18,792</span></div>
+                <div class="flex justify-between py-1 border-b border-surface-container"><span>Page Hits:</span> <span class="text-primary font-medium" id="res-hits">18,450</span></div>
+                <div class="flex justify-between py-1 border-b border-surface-container"><span>Page Faults:</span> <span class="text-error font-medium" id="res-faults">342</span></div>
+                <div class="flex justify-between py-1 border-b border-surface-container"><span>Hit Ratio:</span> <span class="text-secondary font-medium" id="res-ratio">98.18%</span></div>
+              </div>
+            </div>
+
+            <div class="bg-surface-container-lowest p-space-lg rounded-xl border border-surface-container flex flex-col gap-space-md md:col-span-2">
+              <h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Simulated Frame Table (64 Frames)</h3>
+              <div class="grid grid-cols-8 md:grid-cols-16 gap-1 p-space-sm bg-surface-container-low rounded-DEFAULT" id="frames-grid">
+                <!-- 64 frame boxes generated via JS -->
+              </div>
+              <div class="flex items-center gap-space-md font-code-sm text-code-sm text-outline">
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-DEFAULT bg-primary inline-block"></span> Active Cached</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-DEFAULT bg-surface-container-highest inline-block"></span> Free Frame</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-DEFAULT bg-error inline-block"></span> Evicted (Fault)</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ==================== NEW TRANSACTION MODAL ==================== -->
+  <div id="transfer-modal" class="modal-backdrop">
+    <div class="modal-card w-full max-w-lg bg-surface-container-lowest border border-surface-container-high rounded-xl p-space-xl shadow-2xl space-y-space-md">
+      <div class="flex items-center justify-between border-b border-surface-container pb-space-sm">
+        <div class="flex items-center gap-space-sm">
+          <span class="material-symbols-outlined text-primary text-[22px]">bolt</span>
+          <h2 class="font-headline-md text-headline-md text-on-surface font-semibold">New ACID Transfer</h2>
+        </div>
+        <button id="close-transfer-modal-btn" class="text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <!-- Feedback Banner -->
+      <div id="modal-alert-box" class="hidden p-space-sm rounded-DEFAULT font-code-sm text-code-sm flex items-center gap-2"></div>
+
+      <form id="transfer-form" class="space-y-space-md">
+        <div>
+          <label class="block font-label-caps text-label-caps text-outline uppercase mb-1">From Account (Source)</label>
+          <select id="modal-from-account" required class="w-full h-9 px-space-sm rounded-DEFAULT bg-surface-container border border-surface-container-high text-body-sm text-on-surface focus:outline-none focus:border-primary font-code-sm text-code-sm">
+            <option value="101">Account 101 — Alice Sharma ($9,400.00)</option>
+            <option value="102">Account 102 — Bob Verma ($5,600.00)</option>
+            <option value="103">Account 103 — Charlie Singh ($7,000.00)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-label-caps text-label-caps text-outline uppercase mb-1">To Account (Destination)</label>
+          <select id="modal-to-account" required class="w-full h-9 px-space-sm rounded-DEFAULT bg-surface-container border border-surface-container-high text-body-sm text-on-surface focus:outline-none focus:border-primary font-code-sm text-code-sm">
+            <option value="102">Account 102 — Bob Verma ($5,600.00)</option>
+            <option value="101">Account 101 — Alice Sharma ($9,400.00)</option>
+            <option value="103">Account 103 — Charlie Singh ($7,000.00)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-label-caps text-label-caps text-outline uppercase mb-1">Transfer Amount (USD)</label>
+          <div class="relative">
+            <span class="absolute left-3 top-2 text-outline font-code-sm text-code-sm">$</span>
+            <input id="modal-amount" type="number" step="0.01" min="1.00" max="100000.00" value="250.00" required class="w-full h-9 pl-7 pr-3 rounded-DEFAULT bg-surface-container border border-surface-container-high text-body-sm text-on-surface focus:outline-none focus:border-primary font-code-sm text-code-sm" placeholder="250.00"/>
+          </div>
+        </div>
+
+        <div class="p-space-xs rounded-DEFAULT bg-surface-container-low border border-surface-container font-code-sm text-code-sm text-outline space-y-1">
+          <div class="flex justify-between"><span>Concurrency Mode:</span> <span class="text-primary font-medium">Strict 2PL Exclusive Lock</span></div>
+          <div class="flex justify-between"><span>Deadlock Detection:</span> <span class="text-secondary font-medium">Active WFG Probe</span></div>
+        </div>
+
+        <div class="flex items-center justify-end gap-space-sm pt-space-xs border-t border-surface-container">
+          <button type="button" id="modal-cancel-btn" class="px-space-md py-1.5 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md">Cancel</button>
+          <button type="submit" id="modal-submit-btn" class="px-space-md py-1.5 rounded-DEFAULT bg-primary-container hover:bg-primary text-on-primary-container hover:text-on-primary font-label-md text-label-md font-semibold flex items-center gap-2 transition-all">
+            <span class="material-symbols-outlined text-[16px]">send</span>
+            <span id="modal-submit-text">Execute Transfer</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- JavaScript Modules -->
+  <script src="js/mock-data.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
