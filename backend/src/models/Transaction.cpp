@@ -1,4 +1,10 @@
+#if __has_include("models/Transaction.h")
 #include "models/Transaction.h"
+#else
+#include "../../include/models/Transaction.h"
+#endif
+
+#include <string>
 #include <algorithm>
 
 namespace paylock {

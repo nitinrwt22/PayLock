@@ -3,6 +3,7 @@
     {
       "name": "Mac",
       "includePath": [
+        "${workspaceFolder}/backend/include",
         "${workspaceFolder}/**",
         "/opt/homebrew/include",
         "/opt/homebrew/include/mysql",

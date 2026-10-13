@@ -1,5 +1,10 @@
+#if __has_include("locking/LockManager.h")
 #include "locking/LockManager.h"
 #include "logging/Logger.h"
+#else
+#include "../../include/locking/LockManager.h"
+#include "../../include/logging/Logger.h"
+#endif
 #include <iomanip>
 #include <sstream>
 #include <algorithm>
