@@ -25,14 +25,14 @@ PayLock is organized into a modular layered architecture:
 
 ```text
                ┌────────────────────────────────────────────────────────┐
-               │         Frontend Dashboard / Visualization             │
-               │            (HTML5 / CSS3 / JavaScript)                 │
+               │    Google Stitch Frontend Dashboard / Visualization    │
+               │   (High-Velocity Transaction Protocol • SPA • 4 Views) │
                └──────────────────────────┬─────────────────────────────┘
-                                          │ [PLANNED HTTP/REST]
+                                          │ HTTP REST (JSON)
                                           ▼
                ┌────────────────────────────────────────────────────────┐
-               │                    REST API Layer                      │
-               │        (HTTP Endpoints & Request Serialization)        │
+               │              Embedded C++ REST API Layer               │
+               │        (cpp-httplib • 18 Endpoints under /api/v1)      │
                └──────────────────────────┬─────────────────────────────┘
                                           │
                                           ▼
@@ -46,7 +46,7 @@ PayLock is organized into a modular layered architecture:
          ┌─────────────────────────────────┐   ┌────────────────────────┐
          │       ConcurrencyManager        │   │    ResourceManager     │
          │ - Worker threads (std::thread)  │   │ - Memory page alloc    │
-         │ - Critical sections & Mutex     │   │ - Virtual address tr.  │
+         │ - Critical sections & Mutex     │   │ - LRU Paging Simulator │
          └────────────────┬────────────────┘   └────────────────────────┘
                           │
                           ▼
@@ -87,6 +87,7 @@ PayLock is organized into a modular layered architecture:
 PayLock/
 ├── backend/
 │   ├── include/
+│   │   ├── api/            # ApiController.h, HttpServer.h
 │   │   ├── database/       # DatabaseManager.h, DatabaseConfig.h
 │   │   ├── models/         # User.h, Account.h, Transaction.h, TransactionLog.h
 │   │   ├── transaction/    # TransactionManager.h
@@ -94,11 +95,12 @@ PayLock/
 │   │   ├── locking/        # LockManager.h (Shared / Exclusive locks)
 │   │   ├── deadlock/       # DeadlockDetector.h (WFG & Cycle detection)
 │   │   ├── recovery/       # RecoveryManager.h (Victim selection & abort)
-│   │   ├── resources/      # ResourceManager.h (Page allocation & translation)
+│   │   ├── resources/      # ResourceManager.h, PagingSimulator.h
 │   │   └── logging/        # Logger.h (Thread-safe multi-level telemetry)
 │   │
 │   └── src/
-│       ├── main.cpp        # System orchestrator & evaluation CLI
+│       ├── main.cpp        # System orchestrator & evaluation CLI / REST Server
+│       ├── api/            # ApiController.cpp, HttpServer.cpp
 │       ├── database/       # DatabaseManager.cpp
 │       ├── models/         # Model implementations
 │       ├── transaction/    # TransactionManager.cpp
@@ -106,33 +108,43 @@ PayLock/
 │       ├── locking/        # LockManager.cpp
 │       ├── deadlock/       # DeadlockDetector.cpp
 │       ├── recovery/       # RecoveryManager.cpp
-│       ├── resources/      # ResourceManager.cpp
+│       ├── resources/      # ResourceManager.cpp, PagingSimulator.cpp
 │       └── logging/        # Logger.cpp
 │
 ├── database/
 │   ├── schema.sql          # Relational tables, CHECK constraints, FK cascades
-│   ├── seed.sql            # Seed accounts (Nitin: ₹10,000, Ansh: ₹5,000, Megha: ₹7,000)
+│   ├── seed.sql            # Seed accounts (Alice: $9,400, Bob: $5,600, Charlie: $7,000)
 │   └── procedures.sql      # Stored procedures (sp_transfer_funds)
 │
 ├── tests/
-│   └── test_db.cpp         # Comprehensive 25-test automated test suite
+│   ├── test_db.cpp         # 89 unit, concurrency, lock, detection & paging tests
+│   └── test_api.cpp        # 33 end-to-end HTTP REST API tests (122 tests total)
 │
 ├── frontend/
-│   ├── index.html          # Interactive dark-mode dashboard
-│   ├── css/style.css       # Glassmorphism visual styles
-│   ├── js/app.js           # Client-side dynamic simulation & future API client
-│   └── README.md           # Frontend documentation
+│   ├── index.html          # Faithful Google Stitch SPA (Overview, Txns, Concurrency, Inspector)
+│   ├── css/style.css       # Design tokens, custom animations, toasts, and modal backdrops
+│   ├── js/
+│   │   ├── api.js          # Centralized C++ REST API client (http://127.0.0.1:8080/api/v1)
+│   │   ├── app.js          # SPA navigation, hotkeys (⌘1-6, N), telemetry polling, modal controller
+│   │   └── mock-data.js    # Fallback telemetry matching Stitch specification
+│   ├── design/
+│   │   ├── DESIGN.md       # Color tokens, typography, elevation, and layout geometry
+│   │   ├── SCREEN_INVENTORY.md # 4 Stitch screens, IDs, references, and endpoint bindings
+│   │   └── reference/      # Archived Stitch HTML source files and reference PNG screenshots
+│   └── README.md           # Frontend architecture and integration guide
 │
 ├── docs/
 │   ├── architecture.md     # Architectural blueprint & subsystem mapping
 │   ├── database.md         # Relational schema, normalization & ACID specification
 │   ├── concurrency.md      # Multithreading, synchronization & critical sections
+│   ├── locking.md          # 2-Phase Locking (2PL), shared/exclusive compatibility
 │   ├── deadlock.md         # WFG theory, detection algorithms & recovery strategies
-│   └── api.md              # REST API endpoint contracts
+│   ├── resources.md        # Resource quotas & LRU paging simulation
+│   └── api.md              # REST API endpoint specifications & curl examples
 │
 ├── CMakeLists.txt          # CMake C++17 build specification
 ├── Makefile                # Fast CLI compilation & test runner
-├── README.md               # Project documentation
+├── README.md               # Complete project documentation & viva guide
 └── .gitignore              # Build and IDE artifact exclusions
 ```
 
@@ -142,27 +154,29 @@ PayLock/
 - **Language**: C++17 (Compiled with Apple Clang / GCC)
 - **Database**: MySQL 9.x (InnoDB Engine, ACID compliance, WAL redo logs)
 - **Database Driver**: MySQL C/C++ Client Library (`libmysqlclient` / `<mysql.h>`)
+- **Web API**: Embedded `cpp-httplib` + `nlohmann/json` (zero external daemon dependencies)
 - **Build System**: CMake (v3.15+) and Make
-- **Frontend Prototype**: HTML5, CSS3 (Modern Glassmorphic Dark UI), Vanilla JavaScript ES6
+- **Frontend Dashboard**: HTML5, Vanilla JavaScript ES6, Tailwind CSS Engine (Stitch Theme Tokens)
+- **Design Origin**: Google Stitch (Project ID: `14592152822615229882`)
 
 ---
 
-## Current Status
+## Subsystem Status
 
 | Subsystem / Module | Responsibility | Status |
 |---|---|---|
-| **DatabaseManager** | MySQL connection pool, prepared queries, transaction commands | **[BUILT]** |
-| **Domain Models** | User, Account, Transaction, TransactionLog value objects | **[BUILT]** |
-| **TransactionManager** | Transfer, deposit, withdraw, balance validation, ACID rollback | **[BUILT]** |
-| **Concurrent Processor** | `std::thread` concurrent workers, race-condition prevention, mutex guards | **[BUILT]** |
-| **Logger** | Centralized thread-safe console & structured event logging | **[BUILT]** |
-| **ConcurrencyManager** | Facade for thread execution, worker scheduling & contention control | **[BUILT]** |
-| **LockManager** | Shared (S) and Exclusive (X) 2-Phase Locking, FIFO wait queues, lock upgrades | **[BUILT]** |
-| **DeadlockDetector** | Wait-For Graph (WFG) snapshot synthesis, directed cycle detection (3-Color DFS), DeadlockReport generation | **[BUILT]** |
-| **RecoveryManager** | Deadlock victim selection policies, cooperative thread abort, MySQL rollback, lock release & waiter resumption | **[BUILT]** |
-| **ResourceManager** | Logical resource quotas, admission control, virtual address translation, and LRU paging simulator | **[BUILT]** |
-| **Frontend Prototype** | Interactive web dashboard visualizing balances, threads, and logs | **[BUILT (Prototype)]** |
-| **REST API Layer** | Embedded HTTP server exposing `/api/transactions` and `/api/locks` | **[PLANNED]** |
+| **DatabaseManager** | MySQL connection pool, prepared queries, transaction commands | **[COMPLETE]** |
+| **Domain Models** | User, Account, Transaction, TransactionLog value objects | **[COMPLETE]** |
+| **TransactionManager** | Transfer, deposit, withdraw, balance validation, ACID rollback | **[COMPLETE]** |
+| **Concurrent Processor** | `std::thread` concurrent workers, race-condition prevention, mutex guards | **[COMPLETE]** |
+| **Logger** | Centralized thread-safe console & structured event logging | **[COMPLETE]** |
+| **ConcurrencyManager** | Facade for thread execution, worker scheduling & contention control | **[COMPLETE]** |
+| **LockManager** | Shared (S) and Exclusive (X) 2-Phase Locking, FIFO wait queues, lock upgrades | **[COMPLETE]** |
+| **DeadlockDetector** | Wait-For Graph (WFG) snapshot synthesis, directed cycle detection (3-Color DFS), DeadlockReport generation | **[COMPLETE]** |
+| **RecoveryManager** | Deadlock victim selection policies, cooperative thread abort, MySQL rollback, lock release & waiter resumption | **[COMPLETE]** |
+| **ResourceManager & Paging** | Logical resource quotas, admission control, virtual address translation, and LRU paging simulator | **[COMPLETE]** |
+| **REST API Layer** | Embedded HTTP server exposing 18 REST endpoints under `/api/v1` | **[COMPLETE]** |
+| **Stitch Frontend SPA** | Faithful Stitch UI implementation with 4 screens, modals, and live API connectivity | **[COMPLETE]** |
 
 ---
 
@@ -447,27 +461,85 @@ The demonstration runs:
 - Day 7: Logical resource capacity limits, admission control, and deterministic LRU memory paging simulation
 - Day 8: Embedded HTTP REST API server with 18 endpoints under `/api/v1`
 
-### 2. Run the Automated Test Suite (122 Tests)
+### 2. Run the Embedded HTTP REST API Server
+```bash
+# Start native C++ HTTP API server on port 8080
+./build/paylock --server --port 8080 --host 127.0.0.1
+```
+
+### 3. Run the Google Stitch Frontend Dashboard
+```bash
+# Serve frontend via Python HTTP server on port 3000
+python3 -m http.server 3000 --directory frontend
+```
+Navigate to `http://localhost:3000` in any modern web browser.
+
+### 4. Run the Full Automated Test Suite (122 Tests)
 ```bash
 # Run both backend unit tests and HTTP API integration tests
 make test
 
-# Or run executables directly:
+# Or run individual test targets directly:
 ./build/test_db   # 89 unit, ACID, concurrency, lock, deadlock & paging tests
 ./build/test_api  # 33 end-to-end HTTP REST API tests
 ```
 
 ---
 
-## Project Status
+## Complete Project Status (Steps 1–10)
 
 - **Step 1 — Modular Architecture & Refactoring**: **COMPLETE**
 - **Step 2 — MySQL Transaction Engine**: **COMPLETE**
 - **Step 3 — Concurrency Engine**: **COMPLETE**
-- **Step 4 — Lock Manager (2PL)**: **COMPLETE**
-- **Step 5 — Deadlock Detection (WFG)**: **COMPLETE**
+- **Step 4 — Lock Manager (Strict 2PL)**: **COMPLETE**
+- **Step 5 — Deadlock Detection (WFG & 3-Color DFS)**: **COMPLETE**
 - **Step 6 — Deadlock Recovery (Victim Selection & Rollback)**: **COMPLETE**
 - **Step 7 — Resource Management & Paging Simulation**: **COMPLETE**
-- **Step 8 — REST API Layer (HTTP REST Endpoints)**: **COMPLETE**
-- **Step 9 — Frontend Integration (Google Stitch Prototype)**: Upcoming
+- **Step 8 — Embedded HTTP REST API Layer (18 Endpoints)**: **COMPLETE**
+- **Step 9 — Google Stitch Frontend SPA Integration**: **COMPLETE**
+- **Step 10 — Final Integration, Testing & Delivery**: **COMPLETE**
 
+---
+
+## College Viva & Project Presentation Walkthrough
+
+Follow this step-by-step workflow during project demonstrations:
+
+1. **Verify MySQL Engine Connectivity**:
+   - Ensure MySQL is active (`mysql -u root -e "SHOW DATABASES;"`).
+   - Query starting balances: Alice ($9,400), Bob ($5,600), Charlie ($7,000). System sum = $22,000.
+2. **Launch C++ REST Server**:
+   - Run `./build/paylock --server --port 8080`.
+   - Show health probe: `curl http://127.0.0.1:8080/api/v1/health` returns `status: "healthy"`.
+3. **Launch Frontend Application**:
+   - Run `python3 -m http.server 3000 --directory frontend` and open `http://localhost:3000`.
+   - Present the 256px sidebar, telemetry chip, 8-KPI metric strip, and 2PL lock contention map.
+4. **Demonstrate ACID Financial Transfer**:
+   - Click `New Transaction` (`N` key).
+   - Transfer `$250.00` from Account 101 to Account 102.
+   - Observe immediate WAL commit, transaction table update, and balance adjustments ($9,150 / $5,850).
+   - Invariant verified: Total system balance remains constant at $22,000.00.
+5. **Demonstrate Multithreaded Concurrency & Pipeline Flow**:
+   - Navigate to `Thread Pool` (`⌘5`).
+   - Show active POSIX workers (`T-01` through `T-06`), stage progression, and lock wait states.
+   - Click `Simulate` to dispatch concurrent worker jobs under thread pool load.
+6. **Demonstrate Deadlock Detection & Recovery**:
+   - Navigate to `Deadlock Monitor`.
+   - Inspect the Wait-For Graph (WFG) dependency cycle: $T_i \to T_j \to T_k \to T_i$.
+   - Highlight the victim selection report (youngest transaction aborted, locks released, surviving transactions proceed).
+7. **Demonstrate OS Resource Quotas & LRU Paging**:
+   - Navigate to `OS Resources`.
+   - Explain the 64-frame memory table, page reference string, hit ratio (98.18%), and LRU replacement.
+8. **Demonstrate Automated Test Suites**:
+   - Execute `./build/test_db` (89 tests) and `./build/test_api` (33 tests) in terminal — all 122 pass with zero errors.
+
+---
+
+## Known Limitations & Design Notes
+
+1. **Paging Simulation vs. MySQL InnoDB Buffer Pool**:
+   - The OS Paging Simulator (`PagingSimulator`) is a high-fidelity logical simulation designed for educational demonstration of OS page-table translation and LRU algorithms. It operates independently from MySQL's internal InnoDB Buffer Pool memory manager.
+2. **Local Loopback Configuration**:
+   - The embedded HTTP server binds by default to `127.0.0.1:8080` for safe local development. For external network deployment, supply the `--host 0.0.0.0` flag and configure appropriate firewall rules.
+3. **Database Schema Initialization**:
+   - PayLock requires MySQL 8.0+ or 9.x with `InnoDB` default storage engine. Schema scripts in `database/` must be run once prior to running integration suites.
