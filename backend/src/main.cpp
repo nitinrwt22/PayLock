@@ -8,11 +8,14 @@
 #include "recovery/RecoveryManager.h"
 #include "resources/ResourceManager.h"
 #include "resources/PagingSimulator.h"
+#include "api/HttpServer.h"
 #include <iostream>
 #include <iomanip>
 #include <cassert>
 #include <string>
 #include <vector>
+#include <csignal>
+#include <cstdlib>
 #include <unistd.h>
 
 void resetDatabaseState(paylock::DatabaseManager& db) {
@@ -169,6 +172,77 @@ void runAutomatedWalkthrough(paylock::DatabaseManager& adminDb, const paylock::D
     std::cout << "==================================================\n\n";
 }
 
+static std::atomic<bool> g_serverStopRequested{false};
+static paylock::api::HttpServer* g_activeServerInstance = nullptr;
+
+static void apiSignalHandler(int signum) {
+    (void)signum;
+    if (g_activeServerInstance) {
+        std::cout << "\n[PayLock] Received interrupt signal. Stopping HTTP API server...\n";
+        g_activeServerInstance->stop();
+    }
+    g_serverStopRequested = true;
+}
+
+void runHttpApiServer(paylock::DatabaseManager& adminDb, const paylock::DatabaseConfig& config, const std::string& host = "127.0.0.1", int port = 8080) {
+    std::cout << "\n=======================================================\n";
+    std::cout << "        PAYLOCK REST API SERVER (STEP 8)               \n";
+    std::cout << "=======================================================\n";
+
+    paylock::LockManager lockManager;
+    paylock::TransactionManager txManager(adminDb, &lockManager);
+    paylock::RecoveryManager recoveryManager(&lockManager, &txManager, &adminDb);
+    paylock::ConcurrencyManager concurrencyManager(config);
+    paylock::ResourceManager resourceManager;
+    paylock::PagingSimulator pagingSimulator(64);
+
+    paylock::api::HttpServer server(config,
+                                    adminDb,
+                                    lockManager,
+                                    recoveryManager,
+                                    resourceManager,
+                                    pagingSimulator,
+                                    &concurrencyManager,
+                                    host,
+                                    port);
+
+    g_activeServerInstance = &server;
+    std::signal(SIGINT, apiSignalHandler);
+    std::signal(SIGTERM, apiSignalHandler);
+
+    std::cout << " Host      : " << host << "\n";
+    std::cout << " Port      : " << port << "\n";
+    std::cout << " Base URL  : http://" << host << ":" << port << "\n";
+    std::cout << " API Prefix: /api/v1\n";
+    std::cout << "\n Available REST Endpoints:\n";
+    std::cout << "   GET  /api/v1/health\n";
+    std::cout << "   GET  /api/v1/system/stats\n";
+    std::cout << "   GET  /api/v1/accounts\n";
+    std::cout << "   GET  /api/v1/accounts/:id\n";
+    std::cout << "   GET  /api/v1/transactions\n";
+    std::cout << "   GET  /api/v1/transactions/:id\n";
+    std::cout << "   POST /api/v1/transactions/transfer\n";
+    std::cout << "   POST /api/v1/transactions/deposit\n";
+    std::cout << "   POST /api/v1/transactions/withdraw\n";
+    std::cout << "   GET  /api/v1/concurrency/status\n";
+    std::cout << "   GET  /api/v1/concurrency/transactions\n";
+    std::cout << "   GET  /api/v1/locks\n";
+    std::cout << "   GET  /api/v1/locks/wait-for-graph\n";
+    std::cout << "   GET  /api/v1/deadlocks\n";
+    std::cout << "   GET  /api/v1/recovery/history\n";
+    std::cout << "   GET  /api/v1/resources\n";
+    std::cout << "   GET  /api/v1/paging/stats\n";
+    std::cout << "   GET  /api/v1/paging/frames\n";
+    std::cout << "=======================================================\n";
+    std::cout << " Server is running. Press Ctrl+C to terminate.\n\n";
+
+    // Run synchronously on main thread
+    server.start(false);
+
+    g_activeServerInstance = nullptr;
+    std::cout << "[PayLock] API Server has shut down cleanly.\n";
+}
+
 void runInteractiveCLI(paylock::DatabaseManager& adminDb, const paylock::DatabaseConfig& config) {
     paylock::TransactionManager txManager(adminDb);
 
@@ -191,9 +265,10 @@ void runInteractiveCLI(paylock::DatabaseManager& adminDb, const paylock::Databas
         std::cout << "12. Controlled LRU Paging Simulation Demo (Step 7)\n";
         std::cout << "13. Run Full Automated Walkthrough\n";
         std::cout << "14. Reset Database to Seed State\n";
-        std::cout << "15. Exit\n";
+        std::cout << "15. Start HTTP REST API Server (Step 8)\n";
+        std::cout << "16. Exit\n";
         std::cout << "----------------------------------------\n";
-        std::cout << "Enter choice [1-15]: ";
+        std::cout << "Enter choice [1-16]: ";
 
         int choice = 0;
         if (!(std::cin >> choice)) {
@@ -291,11 +366,15 @@ void runInteractiveCLI(paylock::DatabaseManager& adminDb, const paylock::Databas
                 break;
             }
             case 15: {
+                runHttpApiServer(adminDb, config);
+                break;
+            }
+            case 16: {
                 std::cout << "Exiting PayLock. Goodbye!\n";
                 return;
             }
             default: {
-                std::cout << "Invalid choice. Please enter a number between 1 and 15.\n";
+                std::cout << "Invalid choice. Please enter a number between 1 and 16.\n";
                 break;
             }
         }
@@ -315,6 +394,17 @@ int main(int argc, char* argv[]) {
 
         bool forceInteractive = false;
         bool forceAutomated = false;
+        bool forceServer = false;
+        std::string host = "127.0.0.1";
+        int port = 8080;
+
+        if (const char* envPort = std::getenv("PAYLOCK_PORT")) {
+            port = std::atoi(envPort);
+            if (port <= 0) port = 8080;
+        }
+        if (const char* envHost = std::getenv("PAYLOCK_HOST")) {
+            host = envHost;
+        }
 
         for (int i = 1; i < argc; ++i) {
             std::string arg = argv[i];
@@ -322,10 +412,18 @@ int main(int argc, char* argv[]) {
                 forceInteractive = true;
             } else if (arg == "--auto" || arg == "-a" || arg == "--demo") {
                 forceAutomated = true;
+            } else if (arg == "--server" || arg == "-s") {
+                forceServer = true;
+            } else if ((arg == "--port" || arg == "-p") && i + 1 < argc) {
+                port = std::atoi(argv[++i]);
+            } else if ((arg == "--host" || arg == "-h") && i + 1 < argc) {
+                host = argv[++i];
             }
         }
 
-        if (forceInteractive) {
+        if (forceServer) {
+            runHttpApiServer(adminDb, config, host, port);
+        } else if (forceInteractive) {
             runInteractiveCLI(adminDb, config);
         } else if (forceAutomated || !isatty(STDIN_FILENO)) {
             runAutomatedWalkthrough(adminDb, config);

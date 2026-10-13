@@ -64,6 +64,8 @@ set(PAYLOCK_CORE_SOURCES
     backend/src/recovery/RecoveryManager.cpp
     backend/src/resources/ResourceManager.cpp
     backend/src/resources/PagingSimulator.cpp
+    backend/src/api/ApiController.cpp
+    backend/src/api/HttpServer.cpp
 )
 
 # Main Executable
@@ -96,3 +98,19 @@ target_link_libraries(test_db PRIVATE
     z
     resolv
 )
+
+# API Tests Executable
+add_executable(test_api
+    tests/test_api.cpp
+    ${PAYLOCK_CORE_SOURCES}
+)
+
+target_link_libraries(test_api PRIVATE
+    mysqlclient
+    zstd
+    ssl
+    crypto
+    z
+    resolv
+)
+

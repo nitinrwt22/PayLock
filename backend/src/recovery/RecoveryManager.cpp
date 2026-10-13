@@ -232,12 +232,14 @@ RecoveryResult RecoveryManager::recover(const DeadlockReport& report, VictimPoli
     if (!rollbackSuccess && result.rollbackOutcome == RollbackOutcome::DATABASE_ERROR) {
         result.success = false;
         Logger::warn("Recovery failed during database rollback", "RecoveryManager");
+        recoveryHistory_.push_back(result);
         return result;
     }
 
     result.success = true;
     totalRecoveries_++;
     processedCycles_.insert(cycle);
+    recoveryHistory_.push_back(result);
 
     Logger::info("Recovery completed", "RecoveryManager");
     return result;
@@ -279,6 +281,12 @@ void RecoveryManager::resetRecoveryCount() noexcept {
     std::lock_guard<std::mutex> lock(recoveryMutex_);
     totalRecoveries_ = 0;
     processedCycles_.clear();
+    recoveryHistory_.clear();
+}
+
+std::vector<RecoveryResult> RecoveryManager::getRecoveryHistory() const {
+    std::lock_guard<std::mutex> lock(recoveryMutex_);
+    return recoveryHistory_;
 }
 
 RecoveryResult RecoveryManager::demonstrateControlledDeadlockRecovery(LockManager& lm, DatabaseManager* db) {

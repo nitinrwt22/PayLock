@@ -341,6 +341,48 @@ PayLock's **Resource Manager & Paging Engine** (`paylock::ResourceManager` & `pa
 
 ---
 
+## Embedded REST API Layer (Step 8)
+
+PayLock features a high-performance, embedded C++ HTTP REST API server (`paylock::api::HttpServer` & `paylock::api::ApiController`) built on `cpp-httplib` and `nlohmann/json`. It directly exposes the backend's core transaction processing, locking, deadlock detection, recovery, and resource management engines to external clients.
+
+### 1. Starting the API Server
+```bash
+# Start server on default address (127.0.0.1:8080)
+./paylock --server
+
+# Start with custom port and host
+./paylock --server --port 8080 --host 127.0.0.1
+
+# Or select Option 15 from the interactive CLI menu:
+./paylock -i
+```
+
+### 2. Available Endpoints (`/api/v1`)
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/health` | Service health & MySQL database connection probe |
+| `GET` | `/api/v1/system/stats` | Aggregated system metrics (Tx, Locks, Deadlocks, Resources, Paging) |
+| `GET` | `/api/v1/accounts` | Paginated account records from MySQL (`limit`, `offset`, `page`) |
+| `GET` | `/api/v1/accounts/:id` | Single account details & balance |
+| `GET` | `/api/v1/transactions` | Filtered transaction history (`status`, `account_id`, `limit`) |
+| `GET` | `/api/v1/transactions/:id`| Persisted transaction details |
+| `POST`| `/api/v1/transactions/transfer`| Atomic 2PL transfer between accounts |
+| `POST`| `/api/v1/transactions/deposit` | Account deposit |
+| `POST`| `/api/v1/transactions/withdraw`| Account withdrawal |
+| `GET` | `/api/v1/concurrency/status` | Active worker thread pool metrics & states |
+| `GET` | `/api/v1/concurrency/transactions` | Worker execution and task queue status |
+| `GET` | `/api/v1/locks` | Lock table snapshot (granted holders & FIFO wait queues) |
+| `GET` | `/api/v1/locks/wait-for-graph`| Wait-For Graph (vertices, directed edges, detected cycles) |
+| `GET` | `/api/v1/deadlocks` | Deadlock cycle analysis & detection report |
+| `GET` | `/api/v1/recovery/history` | Historical deadlock abort & rollback records |
+| `GET` | `/api/v1/resources` | Logical resource manager capacity & allocations |
+| `GET` | `/api/v1/paging/stats` | Simulated OS LRU paging hit/fault metrics |
+| `GET` | `/api/v1/paging/frames` | Simulated frame table & page mappings |
+
+Full API contracts, request/response schemas, and example `curl` commands are available in [docs/api.md](file:///Users/nitinrawat/PayLock/docs/api.md).
+
+---
+
 ## Database Setup
 
 ### 1. Execute SQL Scripts
@@ -352,13 +394,16 @@ mysql -u root -p < database/procedures.sql
 ```
 
 ### 2. Configure Environment Variables (Optional)
-Sensible defaults (`host=127.0.0.1`, `user=root`, `port=3306`, `database=paylock_db`) are included. Override via environment variables if needed:
+Sensible defaults (`host=127.0.0.1`, `user=root`, `port=3306`, `database=paylock_db`) are included. Override via `.env` or environment variables if needed:
 ```bash
-export PAYLOCK_DB_HOST="127.0.0.1"
-export PAYLOCK_DB_USER="root"
-export PAYLOCK_DB_PASS="your_password"
-export PAYLOCK_DB_NAME="paylock_db"
-export PAYLOCK_DB_PORT="3306"
+cp .env.example .env
+export PAYLOCK_PORT="8080"
+export PAYLOCK_HOST="127.0.0.1"
+export DB_HOST="127.0.0.1"
+export DB_USER="root"
+export DB_PASS=""
+export DB_NAME="paylock_db"
+export DB_PORT="3306"
 ```
 
 ---
@@ -367,7 +412,7 @@ export PAYLOCK_DB_PORT="3306"
 
 ### Option A: Using Make (Fastest)
 ```bash
-# Compile both the main application and test suite
+# Compile the main application, test suite, and API test suite
 make
 
 # Clean build artifacts
@@ -386,7 +431,7 @@ cmake --build .
 
 ## Run Instructions
 
-### 1. Run the Main Demonstration
+### 1. Run the Main Demonstration & CLI
 ```bash
 ./paylock
 # Or via make:
@@ -400,31 +445,29 @@ The demonstration runs:
 - Day 5: Wait-For Graph (WFG) analysis and 3-color DFS deadlock cycle detection
 - Day 6: Deterministic victim selection, safe cooperative abort, MySQL rollback, lock release, and waiter resumption
 - Day 7: Logical resource capacity limits, admission control, and deterministic LRU memory paging simulation
+- Day 8: Embedded HTTP REST API server with 18 endpoints under `/api/v1`
 
-### 2. Run the Automated Test Suite
+### 2. Run the Automated Test Suite (122 Tests)
 ```bash
-./test_db
-# Or via make:
+# Run both backend unit tests and HTTP API integration tests
 make test
-```
-Executes all 89 unit, integration, ACID, concurrency, architecture, Lock Manager, Deadlock Detection, Deadlock Recovery, and Paging tests.
 
-### 3. Open the Frontend Dashboard
-```bash
-# Option 1: Direct browser launch
-open frontend/index.html
-
-# Option 2: Local HTTP server
-python3 -m http.server 8080 --directory frontend
+# Or run executables directly:
+./build/test_db   # 89 unit, ACID, concurrency, lock, deadlock & paging tests
+./build/test_api  # 33 end-to-end HTTP REST API tests
 ```
 
 ---
 
-## Future Modules
-In upcoming phases, the remaining advanced modules will be populated with full implementations:
-- **Lock Manager**: **[COMPLETED IN STEP 4]** Granular row-level 2-Phase Locking (2PL), shared read locks, exclusive write locks, FIFO wait queues, lock upgrades.
-- **Deadlock Detection**: **[COMPLETED IN STEP 5]** Wait-For Graph (WFG) snapshot synthesis, 3-color DFS directed cycle detection, DeadlockReport generation, controlled demonstration.
-- **Deadlock Recovery**: **[COMPLETED IN STEP 6]** Deterministic victim selection (Youngest Transaction, Lowest Cost, Fewest Locks), cooperative abort, MySQL rollback, lock release, and waiter resumption.
-- **Resource Management & Paging**: **[COMPLETED IN STEP 7]** Logical capacity tracking, admission control quotas, virtual address translation, and deterministic LRU page replacement simulation.
-- **REST API Layer**: Embedded C++ HTTP server bridging the C++ backend to the web dashboard via standard JSON endpoints (`GET /api/accounts`, `POST /api/transfer`, `GET /api/deadlocks`).
-- **Frontend Integration**: Full live bi-directional dashboard synchronization with real-time WebSocket or Server-Sent Events (SSE) telemetry.
+## Project Status
+
+- **Step 1 — Modular Architecture & Refactoring**: **COMPLETE**
+- **Step 2 — MySQL Transaction Engine**: **COMPLETE**
+- **Step 3 — Concurrency Engine**: **COMPLETE**
+- **Step 4 — Lock Manager (2PL)**: **COMPLETE**
+- **Step 5 — Deadlock Detection (WFG)**: **COMPLETE**
+- **Step 6 — Deadlock Recovery (Victim Selection & Rollback)**: **COMPLETE**
+- **Step 7 — Resource Management & Paging Simulation**: **COMPLETE**
+- **Step 8 — REST API Layer (HTTP REST Endpoints)**: **COMPLETE**
+- **Step 9 — Frontend Integration (Google Stitch Prototype)**: Upcoming
+

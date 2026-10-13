@@ -14,15 +14,19 @@ CORE_SRC = backend/src/logging/Logger.cpp \
            backend/src/deadlock/DeadlockDetector.cpp \
            backend/src/recovery/RecoveryManager.cpp \
            backend/src/resources/ResourceManager.cpp \
-           backend/src/resources/PagingSimulator.cpp
+           backend/src/resources/PagingSimulator.cpp \
+           backend/src/api/ApiController.cpp \
+           backend/src/api/HttpServer.cpp
 
 MAIN_SRC = backend/src/main.cpp $(CORE_SRC)
 TEST_SRC = tests/test_db.cpp $(CORE_SRC)
+API_TEST_SRC = tests/test_api.cpp $(CORE_SRC)
 
 TARGET = paylock
 TEST_TARGET = test_db
+API_TEST_TARGET = test_api
 
-all: $(TARGET) $(TEST_TARGET)
+all: $(TARGET) $(TEST_TARGET) $(API_TEST_TARGET)
 
 $(TARGET): $(MAIN_SRC)
 	$(CXX) $(CXXFLAGS) $(MAIN_SRC) $(LDFLAGS) -o $(TARGET)
@@ -30,14 +34,18 @@ $(TARGET): $(MAIN_SRC)
 $(TEST_TARGET): $(TEST_SRC)
 	$(CXX) $(CXXFLAGS) $(TEST_SRC) $(LDFLAGS) -o $(TEST_TARGET)
 
-test: $(TEST_TARGET)
+$(API_TEST_TARGET): $(API_TEST_SRC)
+	$(CXX) $(CXXFLAGS) $(API_TEST_SRC) $(LDFLAGS) -o $(API_TEST_TARGET)
+
+test: $(TEST_TARGET) $(API_TEST_TARGET)
 	./$(TEST_TARGET)
+	./$(API_TEST_TARGET)
 
 run: $(TARGET)
 	./$(TARGET)
 
 clean:
-	rm -f $(TARGET) $(TEST_TARGET)
+	rm -f $(TARGET) $(TEST_TARGET) $(API_TEST_TARGET)
 	rm -rf build
 
 .PHONY: all clean test run

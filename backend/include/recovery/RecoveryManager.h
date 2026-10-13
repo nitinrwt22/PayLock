@@ -91,6 +91,7 @@ public:
 
     size_t getRecoveryCount() const noexcept;
     void resetRecoveryCount() noexcept;
+    std::vector<RecoveryResult> getRecoveryHistory() const;
 
     // Controlled Deadlock Recovery Demonstration Fixture (Step 6)
     static RecoveryResult demonstrateControlledDeadlockRecovery(LockManager& lm, DatabaseManager* db = nullptr);
@@ -103,6 +104,7 @@ private:
     mutable std::mutex recoveryMutex_;
     size_t totalRecoveries_{0};
     std::set<std::vector<int>> processedCycles_;
+    std::vector<RecoveryResult> recoveryHistory_;
 };
 
 } // namespace paylock
