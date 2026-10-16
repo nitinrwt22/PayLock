@@ -221,33 +221,16 @@
           </nav>
         </div>
 
-        <!-- 3. Diagnostics & Runtime -->
+        <!-- 3. Diagnostics & Memory -->
         <div class="space-y-0.5">
-          <div class="px-space-sm py-space-xs font-label-caps text-label-caps text-outline uppercase tracking-wider">Diagnostics & Runtime</div>
+          <div class="px-space-sm py-space-xs font-label-caps text-label-caps text-outline uppercase tracking-wider">Diagnostics & Memory</div>
           <nav class="space-y-0.5" id="nav-diagnostics">
             <a href="#resources" data-view="resources" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
               <div class="flex items-center gap-space-sm">
-                <span class="material-symbols-outlined text-[18px]">speed</span>
-                <span class="font-body-sm text-body-sm">OS Resources</span>
+                <span class="material-symbols-outlined text-[18px]">memory</span>
+                <span class="font-body-sm text-body-sm">OS Resources & Paging</span>
               </div>
-            </a>
-            <a href="#system-logs" data-view="system-logs" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
-              <div class="flex items-center gap-space-sm">
-                <span class="material-symbols-outlined text-[18px]">receipt_long</span>
-                <span class="font-body-sm text-body-sm">System Logs</span>
-              </div>
-            </a>
-            <a href="#analytics" data-view="analytics" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
-              <div class="flex items-center gap-space-sm">
-                <span class="material-symbols-outlined text-[18px]">query_stats</span>
-                <span class="font-body-sm text-body-sm">Analytics</span>
-              </div>
-            </a>
-            <a href="#system-health" data-view="system-health" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
-              <div class="flex items-center gap-space-sm">
-                <span class="material-symbols-outlined text-[18px]">vital_signs</span>
-                <span class="font-body-sm text-body-sm">Engine Health</span>
-              </div>
+              <span class="font-code-sm text-code-sm text-outline">⌘7</span>
             </a>
           </nav>
         </div>
@@ -702,7 +685,7 @@
                     <th class="py-2.5 px-4">Timestamp</th>
                     <th class="py-2.5 px-4">Sender (Src)</th>
                     <th class="py-2.5 px-4">Receiver (Dst)</th>
-                    <th class="py-2.5 px-4">Amount (USD)</th>
+                    <th class="py-2.5 px-4">Amount (INR)</th>
                     <th class="py-2.5 px-4">Lock Mode</th>
                     <th class="py-2.5 px-4">Worker</th>
                     <th class="py-2.5 px-4">Latency</th>
@@ -990,17 +973,17 @@
               <div class="space-y-space-xs font-code-sm text-code-sm" id="detail-balance-diffs">
                 <div class="p-space-sm rounded-DEFAULT bg-surface-container-low border border-surface-container flex items-center justify-between">
                   <div>
-                    <div class="text-on-surface font-medium">Source: Account 101 (Alice)</div>
-                    <div class="text-outline text-[11px]">$10,650.00 ➔ $9,400.00</div>
+                    <div class="text-on-surface font-medium">Source: Account 101 (Nitin)</div>
+                    <div class="text-outline text-[11px]">₹10,650.00 ➔ ₹9,400.00</div>
                   </div>
-                  <span class="text-error font-bold text-headline-sm">-$1,250.00</span>
+                  <span class="text-error font-bold text-headline-sm">-₹1,250.00</span>
                 </div>
                 <div class="p-space-sm rounded-DEFAULT bg-surface-container-low border border-surface-container flex items-center justify-between">
                   <div>
-                    <div class="text-on-surface font-medium">Destination: Account 102 (Bob)</div>
-                    <div class="text-outline text-[11px]">$4,350.00 ➔ $5,600.00</div>
+                    <div class="text-on-surface font-medium">Destination: Account 102 (Ansh)</div>
+                    <div class="text-outline text-[11px]">₹4,350.00 ➔ ₹5,600.00</div>
                   </div>
-                  <span class="text-primary font-bold text-headline-sm">+$1,250.00</span>
+                  <span class="text-primary font-bold text-headline-sm">+₹1,250.00</span>
                 </div>
               </div>
             </div>
@@ -1096,16 +1079,18 @@
         <div>
           <label class="block font-label-caps text-label-caps text-outline uppercase mb-1">To Account (Destination)</label>
           <select id="modal-to-account" required class="w-full h-9 px-space-sm rounded-DEFAULT bg-surface-container border border-surface-container-high text-body-sm text-on-surface focus:outline-none focus:border-primary font-code-sm text-code-sm">
-            <option value="102">Account 102 — Bob Verma ($5,600.00)</option>
-            <option value="101">Account 101 — Alice Sharma ($9,400.00)</option>
-            <option value="103">Account 103 — Charlie Singh ($7,000.00)</option>
+            <option value="102">Account 102 — Ansh (₹5,000.00)</option>
+            <option value="101">Account 101 — Nitin (₹10,000.00)</option>
+            <option value="103">Account 103 — Megha (₹7,000.00)</option>
+            <option value="104">Account 104 — Vedika (₹15,000.00)</option>
+            <option value="105">Account 105 — Rohan (₹12,000.00)</option>
           </select>
         </div>
 
         <div>
-          <label class="block font-label-caps text-label-caps text-outline uppercase mb-1">Transfer Amount (USD)</label>
+          <label class="block font-label-caps text-label-caps text-outline uppercase mb-1">Transfer Amount (INR)</label>
           <div class="relative">
-            <span class="absolute left-3 top-2 text-outline font-code-sm text-code-sm">$</span>
+            <span class="absolute left-3 top-2 text-outline font-code-sm text-code-sm">₹</span>
             <input id="modal-amount" type="number" step="0.01" min="1.00" max="100000.00" value="250.00" required class="w-full h-9 pl-7 pr-3 rounded-DEFAULT bg-surface-container border border-surface-container-high text-body-sm text-on-surface focus:outline-none focus:border-primary font-code-sm text-code-sm" placeholder="250.00"/>
           </div>
         </div>
@@ -1130,8 +1115,8 @@
   <div id="toast-container" class="toast-container"></div>
 
   <!-- JavaScript Modules -->
-  <script src="js/mock-data.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/mock-data.js?v=2.9"></script>
+  <script src="js/api.js?v=2.9"></script>
+  <script src="js/app.js?v=2.9"></script>
 </body>
 </html>

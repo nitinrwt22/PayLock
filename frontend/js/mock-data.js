@@ -45,11 +45,11 @@ const MockData = {
   },
 
   accounts: [
-    { account_id: 101, owner_name: "Alice Sharma", user_id: 1, balance: 9400.00, created_at: "2026-10-13 14:00:00", status: "ACTIVE" },
-    { account_id: 102, owner_name: "Bob Verma", user_id: 2, balance: 5600.00, created_at: "2026-10-13 14:00:00", status: "ACTIVE" },
-    { account_id: 103, owner_name: "Charlie Singh", user_id: 3, balance: 7000.00, created_at: "2026-10-13 14:00:00", status: "ACTIVE" },
-    { account_id: 104, owner_name: "PayLock Treasury", user_id: 4, balance: 125000.00, created_at: "2026-10-13 14:00:00", status: "ACTIVE" },
-    { account_id: 105, owner_name: "Dev Escrow", user_id: 5, balance: 18450.50, created_at: "2026-10-13 14:00:00", status: "ACTIVE" }
+    { account_id: 101, owner_name: "Nitin", user_id: 1, balance: 10000.00, created_at: "2026-10-13 14:00:00", status: "ACTIVE" },
+    { account_id: 102, owner_name: "Ansh", user_id: 2, balance: 5000.00, created_at: "2026-10-13 14:00:00", status: "ACTIVE" },
+    { account_id: 103, owner_name: "Megha", user_id: 3, balance: 7000.00, created_at: "2026-10-13 14:00:00", status: "ACTIVE" },
+    { account_id: 104, owner_name: "Vedika", user_id: 4, balance: 15000.00, created_at: "2026-10-13 14:00:00", status: "ACTIVE" },
+    { account_id: 105, owner_name: "Rohan", user_id: 5, balance: 12000.00, created_at: "2026-10-13 14:00:00", status: "ACTIVE" }
   ],
 
   transactions: [
@@ -154,7 +154,7 @@ const MockData = {
     {
       transaction_id: 10478,
       id_str: "TXN-10478",
-      from_account_id: 104,
+      from_account_id: 102,
       to_account_id: 101,
       amount: 2200.00,
       status: "COMMITTED",
@@ -163,6 +163,48 @@ const MockData = {
       latency_ms: 14,
       timestamp: "10:41:14.650",
       created_at: "2026-10-13 10:41:14",
+      isolation: "SERIALIZABLE (2PL)"
+    },
+    {
+      transaction_id: 10486,
+      id_str: "TXN-10486",
+      from_account_id: 101,
+      to_account_id: 103,
+      amount: 640.00,
+      status: "PROCESSING",
+      lock_mode: "EXCLUSIVE",
+      worker_id: "T-01",
+      latency_ms: 19,
+      timestamp: "10:40:55.120",
+      created_at: "2026-10-13 10:40:55",
+      isolation: "SERIALIZABLE (2PL)"
+    },
+    {
+      transaction_id: 10487,
+      id_str: "TXN-10487",
+      from_account_id: 102,
+      to_account_id: 101,
+      amount: 1850.00,
+      status: "WAITING",
+      lock_mode: "EXCLUSIVE",
+      worker_id: "T-04",
+      latency_ms: 110,
+      timestamp: "10:40:40.890",
+      created_at: "2026-10-13 10:40:40",
+      isolation: "SERIALIZABLE (2PL)"
+    },
+    {
+      transaction_id: 10488,
+      id_str: "TXN-10488",
+      from_account_id: 101,
+      to_account_id: 102,
+      amount: 4100.00,
+      status: "DEADLOCK",
+      lock_mode: "EXCLUSIVE",
+      worker_id: "T-06",
+      latency_ms: 215,
+      timestamp: "10:40:22.310",
+      created_at: "2026-10-13 10:40:22",
       isolation: "SERIALIZABLE (2PL)"
     }
   ],

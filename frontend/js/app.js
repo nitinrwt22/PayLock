@@ -106,14 +106,11 @@
       'overview': 'view-overview',
       'transactions': 'view-transactions',
       'transaction-detail': 'view-transaction-detail',
-      'accounts': 'view-overview', // Accounts section highlighted inside Overview
+      'accounts': 'view-overview', // Smooth-scrolls to Accounts card in Overview
       'concurrency': 'view-concurrency',
-      'lock-manager': 'view-concurrency',
-      'deadlock-monitor': 'view-concurrency',
-      'resources': 'view-resources',
-      'system-logs': 'view-concurrency',
-      'analytics': 'view-overview',
-      'system-health': 'view-overview'
+      'lock-manager': 'view-concurrency', // Smooth-scrolls to 2PL Lock Table in Concurrency
+      'deadlock-monitor': 'view-concurrency', // Smooth-scrolls to Wait-For Graph in Concurrency
+      'resources': 'view-resources'
     };
 
     const targetSectionId = viewMap[viewName] || 'view-overview';
@@ -146,17 +143,44 @@
       'accounts': 'STORAGE / MYSQL-ACCOUNTS',
       'concurrency': 'RUNTIME / THREAD-POOL',
       'lock-manager': 'CONCURRENCY / 2PL-LOCKS',
-      'deadlock-monitor': 'CONCURRENCY / DEADLOCKS',
-      'resources': 'OS / PAGING-AND-RESOURCES',
-      'system-logs': 'RUNTIME / SYSTEM-LOGS',
-      'analytics': 'ANALYTICS / TELEMETRY',
-      'system-health': 'CLUSTER / HEALTH'
+      'deadlock-monitor': 'CONCURRENCY / DEADLOCK-WFG',
+      'resources': 'OS / PAGING-AND-RESOURCES'
     };
     if (elements.breadcrumb) {
       elements.breadcrumb.textContent = breadcrumbNames[viewName] || viewName.toUpperCase();
     }
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Contextual auto-scroll to sub-section widgets
+    if (viewName === 'accounts') {
+      setTimeout(() => {
+        const el = document.getElementById('overview-accounts-list')?.closest('.bg-surface-container-lowest');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-primary');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-primary'), 1800);
+        }
+      }, 50);
+    } else if (viewName === 'lock-manager') {
+      setTimeout(() => {
+        const el = document.getElementById('locks-table-body')?.closest('.bg-surface-container-lowest');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-secondary');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-secondary'), 1800);
+        }
+      }, 50);
+    } else if (viewName === 'deadlock-monitor') {
+      setTimeout(() => {
+        const el = document.getElementById('wfg-edges-list')?.closest('.bg-surface-container-lowest');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-error');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-error'), 1800);
+        }
+      }, 50);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   // Toast Notification System
@@ -194,9 +218,9 @@
     elements.uptimeClock.textContent = `${hrs}h ${mins}m ${secs}s`;
   }
 
-  // Format Currency
+  // Format Currency (Indian Rupees)
   function formatMoney(amount) {
-    return '$' + Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '₹' + Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   // Status Badge HTML Helper
@@ -278,8 +302,8 @@
             <span class="cursor-pointer hover:underline" onclick="PayLockApp.inspectTransaction('${tx.transaction_id || tx.id}')">${idStr}</span>
           </td>
           <td class="py-2.5 px-3 font-code-sm text-code-sm text-outline">${timeStr}</td>
-          <td class="py-2.5 px-3 font-code-sm text-code-sm text-on-surface">ACC-${tx.from_account_id || tx.sender}</td>
-          <td class="py-2.5 px-3 font-code-sm text-code-sm text-on-surface">ACC-${tx.to_account_id || tx.receiver}</td>
+          <td class="py-2.5 px-3 font-code-sm text-code-sm text-on-surface">ACC-${tx.from_account_id ?? tx.sender_account ?? tx.sender ?? '—'}</td>
+          <td class="py-2.5 px-3 font-code-sm text-code-sm text-on-surface">ACC-${tx.to_account_id ?? tx.receiver_account ?? tx.receiver ?? '—'}</td>
           <td class="py-2.5 px-3 font-code-md text-code-md font-semibold text-on-surface">${formatMoney(amount)}</td>
           <td class="py-2.5 px-3 font-code-sm text-code-sm text-outline">${lockMode}</td>
           <td class="py-2.5 px-3 font-code-sm text-code-sm text-secondary">${worker}</td>
@@ -298,6 +322,27 @@
   function renderTransactionsTable(txns) {
     state.transactions = txns;
     if (!elements.txnsTableBody) return;
+
+    // Update live counts on status filter pills
+    const countAll = txns.length;
+    const countCommitted = txns.filter(t => ['COMMITTED', 'SUCCESS'].includes((t.status || '').toUpperCase())).length;
+    const countProcessing = txns.filter(t => ['PROCESSING', 'PENDING'].includes((t.status || '').toUpperCase())).length;
+    const countWaiting = txns.filter(t => ['WAITING', 'QUEUED'].includes((t.status || '').toUpperCase())).length;
+    const countRolledBack = txns.filter(t => ['ROLLED_BACK', 'ABORTED'].includes((t.status || '').toUpperCase())).length;
+    const countDeadlock = txns.filter(t => ['DEADLOCK', 'FAILED'].includes((t.status || '').toUpperCase())).length;
+
+    const elPillAll = document.getElementById('pill-count-all');
+    if (elPillAll) elPillAll.textContent = countAll;
+    const elPillCommitted = document.getElementById('pill-count-committed');
+    if (elPillCommitted) elPillCommitted.textContent = countCommitted;
+    const elPillProcessing = document.getElementById('pill-count-processing');
+    if (elPillProcessing) elPillProcessing.textContent = countProcessing;
+    const elPillWaiting = document.getElementById('pill-count-waiting');
+    if (elPillWaiting) elPillWaiting.textContent = countWaiting;
+    const elPillRolledBack = document.getElementById('pill-count-rolledback');
+    if (elPillRolledBack) elPillRolledBack.textContent = countRolledBack;
+    const elPillDeadlock = document.getElementById('pill-count-deadlock');
+    if (elPillDeadlock) elPillDeadlock.textContent = countDeadlock;
 
     // Filter by active pill
     let filtered = txns;
@@ -318,8 +363,8 @@
       const q = state.searchQuery.toLowerCase();
       filtered = filtered.filter(t => {
         const idStr = String(t.id_str || t.transaction_id || t.id).toLowerCase();
-        const fromStr = String(t.from_account_id || t.sender).toLowerCase();
-        const toStr = String(t.to_account_id || t.receiver).toLowerCase();
+        const fromStr = String(t.from_account_id ?? t.sender_account ?? t.sender ?? '').toLowerCase();
+        const toStr = String(t.to_account_id ?? t.receiver_account ?? t.receiver ?? '').toLowerCase();
         return idStr.includes(q) || fromStr.includes(q) || toStr.includes(q);
       });
     }
@@ -357,8 +402,8 @@
             <span class="cursor-pointer hover:underline" onclick="PayLockApp.inspectTransaction('${tx.transaction_id || tx.id}')">${idStr}</span>
           </td>
           <td class="py-2.5 px-4 font-code-sm text-code-sm text-outline">${timeStr}</td>
-          <td class="py-2.5 px-4 font-code-sm text-code-sm text-on-surface">ACC-${tx.from_account_id || tx.sender}</td>
-          <td class="py-2.5 px-4 font-code-sm text-code-sm text-on-surface">ACC-${tx.to_account_id || tx.receiver}</td>
+          <td class="py-2.5 px-4 font-code-sm text-code-sm text-on-surface">ACC-${tx.from_account_id ?? tx.sender_account ?? tx.sender ?? '—'}</td>
+          <td class="py-2.5 px-4 font-code-sm text-code-sm text-on-surface">ACC-${tx.to_account_id ?? tx.receiver_account ?? tx.receiver ?? '—'}</td>
           <td class="py-2.5 px-4 font-code-md text-code-md font-semibold text-on-surface">${formatMoney(amount)}</td>
           <td class="py-2.5 px-4 font-code-sm text-code-sm text-outline">
             <span class="px-1.5 py-0.5 rounded bg-surface-container border border-surface-container-high">${lockMode}</span>
@@ -522,8 +567,8 @@
 
     // Populate Balance Diffs
     if (elements.detailBalanceDiffs) {
-      const fromAcc = txn.from_account_id || txn.sender || 101;
-      const toAcc = txn.to_account_id || txn.receiver || 102;
+      const fromAcc = txn.from_account_id ?? txn.sender_account ?? txn.sender ?? 101;
+      const toAcc = txn.to_account_id ?? txn.receiver_account ?? txn.receiver ?? 102;
       const amt = txn.amount || 1250;
       elements.detailBalanceDiffs.innerHTML = `
         <div class="p-space-sm rounded-DEFAULT bg-surface-container-low border border-surface-container flex items-center justify-between">
@@ -644,10 +689,50 @@
       const data = response.data || {};
       const newTxnId = data.transaction_id || `TXN-${Math.floor(Math.random() * 1000 + 10500)}`;
 
-      showToast('Transfer Committed', `Successfully transferred ${formatMoney(amount)} from ACC-${fromId} to ACC-${toId} (ID: ${newTxnId})`, 'success');
+      // Update in-memory state balances immediately for instant visual feedback
+      const sAcc = state.accounts.find(a => a.account_id === fromId);
+      const dAcc = state.accounts.find(a => a.account_id === toId);
+      if (sAcc) sAcc.balance = Math.max(0, sAcc.balance - amount);
+      if (dAcc) dAcc.balance = (dAcc.balance || 0) + amount;
+
+      if (window.MockData && Array.isArray(window.MockData.accounts)) {
+        const ms = window.MockData.accounts.find(a => a.account_id === fromId);
+        const md = window.MockData.accounts.find(a => a.account_id === toId);
+        if (ms) ms.balance = Math.max(0, ms.balance - amount);
+        if (md) md.balance = (md.balance || 0) + amount;
+      }
+
+      // Prepend newly committed transaction so it's immediately visible at the top
+      const rawNum = typeof newTxnId === 'number' ? newTxnId : parseInt(String(newTxnId).replace(/\D/g, '') || '10500', 10);
+      const newTx = {
+        transaction_id: rawNum,
+        id_str: String(newTxnId).startsWith('TXN-') ? newTxnId : `TXN-${newTxnId}`,
+        from_account_id: fromId,
+        to_account_id: toId,
+        sender_account: fromId,
+        receiver_account: toId,
+        amount: amount,
+        status: 'COMMITTED',
+        lock_mode: 'EXCLUSIVE',
+        worker_id: `T-0${Math.floor(Math.random() * 4 + 1)}`,
+        latency_ms: (Math.random() * 6 + 10).toFixed(1),
+        timestamp: new Date().toTimeString().split(' ')[0],
+        created_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
+      };
+
+      state.transactions.unshift(newTx);
+      if (window.MockData && Array.isArray(window.MockData.transactions)) {
+        window.MockData.transactions.unshift(newTx);
+      }
+
+      renderAccounts(state.accounts);
+      renderOverviewTxns(state.transactions);
+      renderTransactionsTable(state.transactions);
+
+      showToast('Transfer Committed', `Successfully transferred ${formatMoney(amount)} from ACC-${fromId} to ACC-${toId} (ID: ${newTx.id_str})`, 'success');
       closeTransferModal();
 
-      // Refresh data
+      // Refresh data from server or mock
       await refreshData();
     } catch (err) {
       const msg = err.message || 'Transaction aborted by backend engine';
@@ -692,16 +777,77 @@
 
   // Simulate Traffic Trigger
   async function triggerSimulation() {
-    showToast('Simulation Triggered', 'Dispatching 4 concurrent worker transfers to test 2PL concurrency', 'info');
-    if (state.accounts.length >= 2) {
-      const acc1 = state.accounts[0].account_id;
-      const acc2 = state.accounts[1].account_id;
-      try {
-        await window.api.transfer(acc1, acc2, 10.00);
+    showToast('Simulation Started', 'Dispatching 4 concurrent worker transfers to test 2PL concurrency & thread pool', 'info');
+    
+    const simBtn = elements.simulateBtn;
+    if (simBtn) {
+      simBtn.disabled = true;
+      simBtn.classList.add('opacity-50');
+    }
+
+    // Determine account pairs (default to seed accounts 101, 102, 103)
+    let a1 = 101, a2 = 102, a3 = 103;
+    if (state.accounts && state.accounts.length >= 2) {
+      a1 = state.accounts[0].account_id;
+      a2 = state.accounts[1].account_id;
+      if (state.accounts.length >= 3) a3 = state.accounts[2].account_id;
+    }
+
+    const testTransfers = [
+      { from: a1, to: a2, amount: 25.00, worker: 'W001' },
+      { from: a2, to: a3, amount: 15.00, worker: 'W002' },
+      { from: a1, to: a3, amount: 30.00, worker: 'W003' },
+      { from: a3, to: a1, amount: 10.00, worker: 'W004' }
+    ];
+
+    try {
+      if (window.api && window.api.isOnline) {
+        // Execute 4 real concurrent transfers simultaneously
+        const results = await Promise.allSettled(
+          testTransfers.map(t => window.api.transfer(t.from, t.to, t.amount))
+        );
         await refreshData();
-        showToast('Worker Committed', `Concurrent transfer completed on ACC-${acc1} -> ACC-${acc2}`, 'success');
-      } catch (err) {
-        showToast('Worker Notification', err.message, 'info');
+        const succeeded = results.filter(r => r.status === 'fulfilled' && r.value && r.value.success !== false).length;
+        showToast('Simulation Finished', `${succeeded} of 4 concurrent transactions committed to MySQL`, 'success');
+      } else {
+        // Fallback: Generate real simulated concurrent transactions in memory
+        for (const t of testTransfers) {
+          const hash = '0x' + Math.random().toString(16).substring(2, 10) + Math.random().toString(16).substring(2, 10);
+          state.transactions.unshift({
+            transaction_id: state.transactions.length + 10500,
+            hash: hash,
+            sender_account: t.from,
+            receiver_account: t.to,
+            amount: t.amount,
+            status: 'COMMITTED',
+            lock_mode: 'EXCLUSIVE',
+            thread_worker: t.worker,
+            latency_ms: (Math.random() * 8 + 6).toFixed(1),
+            created_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
+          });
+
+          // Update local balances if accounts present
+          const sender = state.accounts.find(a => a.account_id === t.from);
+          const receiver = state.accounts.find(a => a.account_id === t.to);
+          if (sender) sender.balance = Math.max(0, sender.balance - t.amount);
+          if (receiver) receiver.balance = receiver.balance + t.amount;
+        }
+
+        // Increment KPI counters
+        if (state.systemStats) {
+          state.systemStats.totalTransactions = (state.systemStats.totalTransactions || 12482) + 4;
+          state.systemStats.completedTransactions = (state.systemStats.completedTransactions || 12210) + 4;
+        }
+
+        renderAll();
+        showToast('Simulation Finished', '4 worker threads completed concurrent transfers (Mock Engine)', 'success');
+      }
+    } catch (err) {
+      showToast('Simulation Error', err.message || 'Error executing concurrent simulation', 'error');
+    } finally {
+      if (simBtn) {
+        simBtn.disabled = false;
+        simBtn.classList.remove('opacity-50');
       }
     }
   }
@@ -778,6 +924,7 @@
       if (isCmdOrCtrl && e.key === '4') { e.preventDefault(); switchView('accounts'); }
       if (isCmdOrCtrl && e.key === '5') { e.preventDefault(); switchView('concurrency'); }
       if (isCmdOrCtrl && e.key === '6') { e.preventDefault(); switchView('lock-manager'); }
+      if (isCmdOrCtrl && e.key === '7') { e.preventDefault(); switchView('resources'); }
       if (isCmdOrCtrl && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         elements.globalSearch?.focus();

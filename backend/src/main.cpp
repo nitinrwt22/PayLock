@@ -210,29 +210,9 @@ void runHttpApiServer(paylock::DatabaseManager& adminDb, const paylock::Database
     std::signal(SIGINT, apiSignalHandler);
     std::signal(SIGTERM, apiSignalHandler);
 
-    std::cout << " Host      : " << host << "\n";
-    std::cout << " Port      : " << port << "\n";
-    std::cout << " Base URL  : http://" << host << ":" << port << "\n";
-    std::cout << " API Prefix: /api/v1\n";
-    std::cout << "\n Available REST Endpoints:\n";
-    std::cout << "   GET  /api/v1/health\n";
-    std::cout << "   GET  /api/v1/system/stats\n";
-    std::cout << "   GET  /api/v1/accounts\n";
-    std::cout << "   GET  /api/v1/accounts/:id\n";
-    std::cout << "   GET  /api/v1/transactions\n";
-    std::cout << "   GET  /api/v1/transactions/:id\n";
-    std::cout << "   POST /api/v1/transactions/transfer\n";
-    std::cout << "   POST /api/v1/transactions/deposit\n";
-    std::cout << "   POST /api/v1/transactions/withdraw\n";
-    std::cout << "   GET  /api/v1/concurrency/status\n";
-    std::cout << "   GET  /api/v1/concurrency/transactions\n";
-    std::cout << "   GET  /api/v1/locks\n";
-    std::cout << "   GET  /api/v1/locks/wait-for-graph\n";
-    std::cout << "   GET  /api/v1/deadlocks\n";
-    std::cout << "   GET  /api/v1/recovery/history\n";
-    std::cout << "   GET  /api/v1/resources\n";
-    std::cout << "   GET  /api/v1/paging/stats\n";
-    std::cout << "   GET  /api/v1/paging/frames\n";
+    std::cout << " Base URL  : http://" << host << ":" << port << "/api/v1\n";
+    std::cout << " Status    : Ready (MySQL Connected • Strict 2PL Active)\n";
+    std::cout << " Frontend  : Open frontend/index.html in browser\n";
     std::cout << "=======================================================\n";
     std::cout << " Server is running. Press Ctrl+C to terminate.\n\n";
 

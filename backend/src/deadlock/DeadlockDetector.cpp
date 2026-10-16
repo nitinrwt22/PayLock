@@ -194,9 +194,6 @@ void DeadlockReport::logReport() const {
         for (const auto& cycle : cycles) {
             Logger::error("Cycle: " + DeadlockDetector::formatCycle(cycle), "DeadlockDetector");
         }
-    } else {
-        Logger::info("Deadlock detection completed", "DeadlockDetector");
-        Logger::info("No deadlock detected", "DeadlockDetector");
     }
 }
 
@@ -282,7 +279,6 @@ std::vector<std::vector<TransactionId>> DeadlockDetector::detectCycles(const Wai
 }
 
 WaitForGraph DeadlockDetector::buildWaitForGraph(const LockTableSnapshot& snapshot) const {
-    Logger::info("Building Wait-For Graph", "DeadlockDetector");
     WaitForGraph graph;
 
     // Add all active transactions as vertices

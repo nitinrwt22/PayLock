@@ -41,9 +41,11 @@ void HttpServer::setupMiddleware() {
         res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Idempotency-Key");
     });
 
-    // 2. Pre-routing: Telemetry Logging
+    // 2. Pre-routing: Telemetry Logging (only log mutating actions like POST/DELETE to keep console clean)
     server_.set_pre_routing_handler([](const httplib::Request& req, httplib::Response&) {
-        Logger::info("[HTTP " + req.method + "] " + req.path, "HttpServer");
+        if (req.method != "GET" && req.method != "OPTIONS") {
+            Logger::info("[HTTP " + req.method + "] " + req.path, "HttpServer");
+        }
         return httplib::Server::HandlerResponse::Unhandled;
     });
 
