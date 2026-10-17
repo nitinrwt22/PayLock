@@ -264,7 +264,24 @@ class PayLockApiClient {
   async getLocks() {
     try {
       const res = await this._request('/locks');
-      return res.data;
+      if (res && res.data) {
+        const raw = Array.isArray(res.data.locks)
+          ? res.data.locks
+          : (Array.isArray(res.data) ? res.data : []);
+        
+        return raw.map(l => ({
+          resource: l.resource_name || l.resource || (l.account_id ? `ACC-${l.account_id}` : 'RESOURCE'),
+          mode: l.current_mode || l.mode || 'EXCLUSIVE',
+          holder_txn: Array.isArray(l.holders) && l.holders.length > 0
+            ? l.holders.join(', ')
+            : (l.holder_txn || 'None'),
+          waiting_txns: Array.isArray(l.wait_queue)
+            ? l.wait_queue.map(w => w.transaction_id || w)
+            : (l.waiting_txns || []),
+          acquired_at: l.acquired_at || new Date().toTimeString().split(' ')[0]
+        }));
+      }
+      return window.MockData ? window.MockData.concurrency.locks : [];
     } catch (err) {
       return window.MockData ? window.MockData.concurrency.locks : [];
     }

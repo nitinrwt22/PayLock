@@ -222,7 +222,7 @@
         </div>
 
         <!-- 3. Diagnostics & Memory -->
-        <div class="space-y-0.5">
+        <div class="space-y-0.5" id="nav-diagnostics-group">
           <div class="px-space-sm py-space-xs font-label-caps text-label-caps text-outline uppercase tracking-wider">Diagnostics & Memory</div>
           <nav class="space-y-0.5" id="nav-diagnostics">
             <a href="#resources" data-view="resources" class="nav-item flex items-center justify-between px-space-sm py-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
@@ -298,10 +298,30 @@
             <span class="material-symbols-outlined text-[16px] text-secondary">play_arrow</span>
             <span>Simulate</span>
           </button>
-          <button id="notifications-btn" class="relative p-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
-            <span class="material-symbols-outlined text-[20px]">notifications</span>
-            <span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-surface-container-lowest"></span>
-          </button>
+
+          <!-- Notifications Bell & Dropdown Container -->
+          <div class="relative">
+            <button id="notifications-btn" class="relative p-1.5 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Engine Notifications">
+              <span class="material-symbols-outlined text-[20px]">notifications</span>
+              <span id="notifications-badge-dot" class="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-surface-container-lowest"></span>
+            </button>
+
+            <!-- Notifications Dropdown Panel -->
+            <div id="notifications-panel" class="hidden absolute right-0 mt-2 w-80 sm:w-96 bg-surface-container-lowest border border-surface-container-high rounded-xl shadow-2xl z-50 overflow-hidden font-body-sm text-body-sm">
+              <div class="p-3 border-b border-surface-container flex items-center justify-between bg-surface-container-low">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-primary text-[18px]">notifications_active</span>
+                  <span class="font-headline-sm font-semibold text-on-surface text-label-md">Engine Telemetry</span>
+                  <span id="notifications-count-badge" class="px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-code-sm text-[10px] font-bold">3</span>
+                </div>
+                <button id="clear-notifications-btn" class="font-code-sm text-[11px] text-outline hover:text-on-surface hover:underline">Clear</button>
+              </div>
+              <div id="notifications-list" class="max-h-80 overflow-y-auto divide-y divide-surface-container/50">
+                <!-- Notifications populated here -->
+              </div>
+            </div>
+          </div>
+
           <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center font-bold text-on-primary">
             <span class="material-symbols-outlined text-[18px]">person</span>
           </div>
@@ -1115,8 +1135,8 @@
   <div id="toast-container" class="toast-container"></div>
 
   <!-- JavaScript Modules -->
-  <script src="js/mock-data.js?v=2.9"></script>
-  <script src="js/api.js?v=2.9"></script>
-  <script src="js/app.js?v=2.9"></script>
+  <script src="js/mock-data.js?v=3.1"></script>
+  <script src="js/api.js?v=3.1"></script>
+  <script src="js/app.js?v=3.1"></script>
 </body>
 </html>

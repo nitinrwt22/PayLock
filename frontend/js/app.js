@@ -19,7 +19,33 @@
     selectedTxn: null,
     activeFilter: 'All',
     searchQuery: '',
-    startTime: Date.now() - (4 * 3600 + 12 * 60 + 44) * 1000 // default 04h 12m 44s
+    startTime: Date.now() - (4 * 3600 + 12 * 60 + 44) * 1000, // default 04h 12m 44s
+    notifications: [
+      {
+        id: 1,
+        type: 'SYSTEM',
+        title: 'C++ Core Engine Online',
+        message: 'Embedded REST API listening on 127.0.0.1:8080. 24 POSIX thread workers active.',
+        time: 'Just now',
+        unread: true
+      },
+      {
+        id: 2,
+        type: 'DEADLOCK',
+        title: 'WFG Cycle Detector Active',
+        message: 'Wait-For Graph initialized. DFS Cycle probe monitoring 2PL lock table.',
+        time: '2m ago',
+        unread: true
+      },
+      {
+        id: 3,
+        type: 'LOCK',
+        title: 'Strict 2PL Enforced',
+        message: 'Row-level exclusive & shared lock guarantees active on MySQL InnoDB accounts.',
+        time: '5m ago',
+        unread: true
+      }
+    ]
   };
 
   // DOM Elements Cache
@@ -49,6 +75,14 @@
     elements.toastContainer = document.getElementById('toast-container');
     elements.globalSearch = document.getElementById('global-search-input');
     elements.simulateBtn = document.getElementById('simulate-traffic-btn');
+
+    // Notifications Elements
+    elements.notificationsBtn = document.getElementById('notifications-btn');
+    elements.notificationsPanel = document.getElementById('notifications-panel');
+    elements.notificationsList = document.getElementById('notifications-list');
+    elements.notificationsBadgeDot = document.getElementById('notifications-badge-dot');
+    elements.notificationsCountBadge = document.getElementById('notifications-count-badge');
+    elements.clearNotificationsBtn = document.getElementById('clear-notifications-btn');
 
     // Overview Elements
     elements.overviewAccounts = document.getElementById('overview-accounts-list');
@@ -183,8 +217,77 @@
     }
   }
 
+  // Notifications Drawer Renderer
+  function renderNotifications() {
+    if (!elements.notificationsList) return;
+    const unreadCount = state.notifications.filter(n => n.unread).length;
+
+    if (elements.notificationsBadgeDot) {
+      elements.notificationsBadgeDot.style.display = unreadCount > 0 ? 'block' : 'none';
+    }
+    if (elements.notificationsCountBadge) {
+      elements.notificationsCountBadge.textContent = unreadCount > 0 ? `${unreadCount} New` : '0';
+    }
+
+    if (!state.notifications || state.notifications.length === 0) {
+      elements.notificationsList.innerHTML = `
+        <div class="p-6 text-center text-outline font-code-sm text-code-sm">
+          <span class="material-symbols-outlined text-[28px] text-outline mb-1 block">notifications_off</span>
+          No alerts logged. Engine running stably.
+        </div>
+      `;
+      return;
+    }
+
+    elements.notificationsList.innerHTML = state.notifications.map(n => {
+      let badgeClass = 'text-primary bg-primary/10 border-primary/20';
+      let icon = 'info';
+      if (n.type === 'DEADLOCK') {
+        badgeClass = 'text-error bg-error-container/20 border-error/30';
+        icon = 'hub';
+      } else if (n.type === 'LOCK') {
+        badgeClass = 'text-secondary bg-secondary/10 border-secondary/20';
+        icon = 'lock';
+      } else if (n.type === 'TRANSFER') {
+        badgeClass = 'text-primary bg-primary/10 border-primary/20';
+        icon = 'bolt';
+      }
+
+      return `
+        <div class="p-3 hover:bg-surface-container-low transition-colors ${n.unread ? 'bg-surface-container/30' : ''}">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-code-sm font-semibold border ${badgeClass} flex items-center gap-1">
+              <span class="material-symbols-outlined text-[12px]">${icon}</span>
+              ${n.type}
+            </span>
+            <span class="text-[11px] font-code-sm text-outline">${n.time}</span>
+          </div>
+          <div class="font-headline-sm text-body-sm font-semibold text-on-surface mb-0.5">${n.title}</div>
+          <div class="font-code-sm text-[12px] text-outline leading-relaxed">${n.message}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function addNotification(type, title, message) {
+    state.notifications.unshift({
+      id: Date.now(),
+      type: type,
+      title: title,
+      message: message,
+      time: 'Just now',
+      unread: true
+    });
+    if (state.notifications.length > 30) state.notifications.pop();
+    renderNotifications();
+  }
+
   // Toast Notification System
   function showToast(title, message, type = 'info') {
+    // Also record event in notifications drawer
+    const notifType = type === 'error' ? 'DEADLOCK' : type === 'success' ? 'TRANSFER' : 'SYSTEM';
+    addNotification(notifType, title, message);
+
     if (!elements.toastContainer) return;
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -469,35 +572,66 @@
 
   // Render Concurrency Locks Table
   function renderLocks(locks) {
-    state.locks = locks;
+    const lockList = Array.isArray(locks)
+      ? locks
+      : (locks && Array.isArray(locks.locks) ? locks.locks : []);
+
+    state.locks = lockList;
     if (!elements.locksTableBody) return;
 
-    if (!locks || locks.length === 0) {
-      elements.locksTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center font-code-sm text-code-sm text-outline">No active locks held.</td></tr>`;
+    if (!lockList || lockList.length === 0) {
+      elements.locksTableBody.innerHTML = `
+        <tr>
+          <td colspan="5" class="py-6 px-4 text-center">
+            <div class="flex flex-col items-center justify-center gap-1.5">
+              <span class="inline-flex items-center gap-2 text-secondary font-code-sm text-code-sm font-semibold">
+                <span class="w-2 h-2 rounded-full bg-secondary inline-block"></span>
+                0 Active Locks Held (Strict 2PL)
+              </span>
+              <p class="text-outline text-body-sm text-[12px] max-w-md">
+                All Exclusive and Shared locks were released upon transaction <span class="text-primary font-semibold">COMMIT</span>.
+                Execute a transfer or click <span class="text-on-surface font-semibold">"Simulate Traffic"</span> to observe live mutex acquisition.
+              </p>
+            </div>
+          </td>
+        </tr>
+      `;
       if (elements.activeLocksCount) elements.activeLocksCount.textContent = '0 Locks Active';
       return;
     }
 
     if (elements.activeLocksCount) {
-      elements.activeLocksCount.textContent = `${locks.length} Locks Tracked`;
+      elements.activeLocksCount.textContent = `${lockList.length} Locks Tracked`;
     }
 
-    elements.locksTableBody.innerHTML = locks.map(l => {
-      const waiters = Array.isArray(l.waiting_txns) && l.waiting_txns.length > 0
-        ? l.waiting_txns.map(w => `TXN-${w}`).join(', ')
-        : 'None';
+    elements.locksTableBody.innerHTML = lockList.map(l => {
+      const resource = l.resource || l.resource_name || (l.account_id ? `ACC-${l.account_id}` : 'RESOURCE');
+      const mode = (l.mode || l.current_mode || 'EXCLUSIVE').toUpperCase();
+      let holder = l.holder_txn || (Array.isArray(l.holders) && l.holders.length > 0 ? l.holders.join(', ') : 'None');
+      if (holder !== 'None' && !String(holder).startsWith('TXN-') && !String(holder).startsWith('T')) {
+        holder = `TXN-${holder}`;
+      }
 
-      const modeBadge = l.mode === 'EXCLUSIVE'
-        ? `<span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-code-sm text-code-sm">EXCLUSIVE</span>`
-        : `<span class="px-1.5 py-0.5 rounded bg-secondary/10 text-secondary font-code-sm text-code-sm">SHARED</span>`;
+      let waiters = 'None';
+      if (Array.isArray(l.waiting_txns) && l.waiting_txns.length > 0) {
+        waiters = l.waiting_txns.map(w => String(w).startsWith('TXN-') ? w : `TXN-${w}`).join(', ');
+      } else if (Array.isArray(l.wait_queue) && l.wait_queue.length > 0) {
+        waiters = l.wait_queue.map(w => w.transaction_id || w).join(', ');
+      }
+
+      const acquiredAt = l.acquired_at || new Date().toTimeString().split(' ')[0];
+
+      const modeBadge = mode === 'EXCLUSIVE'
+        ? `<span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-code-sm text-code-sm font-semibold">EXCLUSIVE</span>`
+        : `<span class="px-1.5 py-0.5 rounded bg-secondary/10 text-secondary font-code-sm text-code-sm font-semibold">SHARED</span>`;
 
       return `
         <tr class="hover:bg-surface-container-low transition-colors">
-          <td class="py-2.5 px-3 font-code-sm text-code-sm font-medium text-on-surface">${l.resource}</td>
+          <td class="py-2.5 px-3 font-code-sm text-code-sm font-medium text-on-surface">${resource}</td>
           <td class="py-2.5 px-3">${modeBadge}</td>
-          <td class="py-2.5 px-3 font-code-sm text-code-sm text-primary">TXN-${l.holder_txn}</td>
+          <td class="py-2.5 px-3 font-code-sm text-code-sm text-primary">${holder}</td>
           <td class="py-2.5 px-3 font-code-sm text-code-sm ${waiters !== 'None' ? 'text-error font-semibold' : 'text-outline'}">${waiters}</td>
-          <td class="py-2.5 px-3 font-code-sm text-code-sm text-outline">${l.acquired_at || '10:42:18.420'}</td>
+          <td class="py-2.5 px-3 font-code-sm text-code-sm text-outline">${acquiredAt}</td>
         </tr>
       `;
     }).join('');
@@ -915,6 +1049,36 @@
       }
     });
 
+    // Notification Dropdown Toggle & Clear
+    elements.notificationsBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!elements.notificationsPanel) return;
+      const isHidden = elements.notificationsPanel.classList.contains('hidden');
+      if (isHidden) {
+        elements.notificationsPanel.classList.remove('hidden');
+        // Mark all as read when opened
+        state.notifications.forEach(n => n.unread = false);
+        renderNotifications();
+      } else {
+        elements.notificationsPanel.classList.add('hidden');
+      }
+    });
+
+    elements.clearNotificationsBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.notifications = [];
+      renderNotifications();
+    });
+
+    // Close notifications panel when clicking outside
+    document.addEventListener('click', (e) => {
+      if (elements.notificationsPanel && !elements.notificationsPanel.classList.contains('hidden')) {
+        if (!elements.notificationsPanel.contains(e.target) && !elements.notificationsBtn?.contains(e.target)) {
+          elements.notificationsPanel.classList.add('hidden');
+        }
+      }
+    });
+
     // Keyboard Shortcuts (Stitch Specification: ⌘1-6, N, ⌘K, Escape)
     window.addEventListener('keydown', (e) => {
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;
@@ -935,6 +1099,7 @@
       }
       if (e.key === 'Escape') {
         closeTransferModal();
+        if (elements.notificationsPanel) elements.notificationsPanel.classList.add('hidden');
       }
     });
   }
@@ -943,6 +1108,7 @@
   async function init() {
     initElements();
     bindEvents();
+    renderNotifications();
     renderThreadPoolPipeline();
     renderFramesGrid();
 
