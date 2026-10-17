@@ -257,7 +257,19 @@ class PayLockApiClient {
       const res = await this._request('/concurrency/status');
       return res.data;
     } catch (err) {
-      return window.MockData ? window.MockData.concurrency : null;
+      if (window.MockData && window.MockData.concurrency) {
+        return { ...window.MockData.concurrency, is_mock: true, error: err.message };
+      }
+      return null;
+    }
+  }
+
+  async getConcurrencyTransactions() {
+    try {
+      const res = await this._request('/concurrency/transactions');
+      return res.data;
+    } catch (err) {
+      return null;
     }
   }
 
@@ -292,7 +304,10 @@ class PayLockApiClient {
       const res = await this._request('/locks/wait-for-graph');
       return res.data;
     } catch (err) {
-      return window.MockData ? window.MockData.concurrency.wfg : null;
+      if (window.MockData && window.MockData.concurrency && window.MockData.concurrency.wfg) {
+        return { ...window.MockData.concurrency.wfg, is_mock: true, error: err.message };
+      }
+      return null;
     }
   }
 
@@ -327,6 +342,15 @@ class PayLockApiClient {
   async getPagingStats() {
     try {
       const res = await this._request('/paging/stats');
+      return res.data;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async getPagingFrames() {
+    try {
+      const res = await this._request('/paging/frames');
       return res.data;
     } catch (err) {
       return null;

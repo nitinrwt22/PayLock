@@ -115,7 +115,9 @@
     elements.activeLocksCount = document.getElementById('active-locks-count');
     elements.wfgEdgesList = document.getElementById('wfg-edges-list');
     elements.wfgVictimTxn = document.getElementById('wfg-victim-txn');
+    elements.wfgCyclePill = document.getElementById('wfg-cycle-pill');
     elements.recoveryTableBody = document.getElementById('recovery-table-body');
+    elements.concurrencyPoolBadge = document.getElementById('concurrency-pool-size-badge');
 
     // Transaction Detail Elements
     elements.detailBreadcrumbId = document.getElementById('detail-breadcrumb-id');
@@ -127,8 +129,14 @@
     elements.detailSqlTrace = document.getElementById('detail-sql-trace');
     elements.detailBackBtn = document.getElementById('detail-back-btn');
 
-    // Paging frames
+    // Paging frames & stats
     elements.framesGrid = document.getElementById('frames-grid');
+    elements.resRefs = document.getElementById('res-refs');
+    elements.resHits = document.getElementById('res-hits');
+    elements.resFaults = document.getElementById('res-faults');
+    elements.resRatio = document.getElementById('res-ratio');
+    elements.pagingFrameTitle = document.getElementById('paging-frame-table-title');
+    elements.pagingFramesBadge = document.getElementById('paging-frames-badge');
   }
 
   // View Navigation
@@ -524,50 +532,175 @@
     }).join('');
   }
 
+  // Helper: map thread state to visual styling
+  function mapWorkerVisuals(stateStr) {
+    const norm = String(stateStr || '').toUpperCase().trim();
+    if (norm === 'RUNNING') {
+      return {
+        displayState: 'RUNNING',
+        stateDotClass: 'bg-primary animate-ping',
+        stateTextColor: 'text-primary',
+        iconColor: 'text-primary',
+        borderColor: 'border-primary/30'
+      };
+    }
+    if (norm === 'WAITING FOR MUTEX' || norm === 'MUTEX_WAIT' || norm === 'WAITING_FOR_MUTEX') {
+      return {
+        displayState: 'MUTEX_WAIT',
+        stateDotClass: 'bg-tertiary animate-pulse',
+        stateTextColor: 'text-tertiary',
+        iconColor: 'text-tertiary',
+        borderColor: 'border-tertiary/30'
+      };
+    }
+    if (norm === 'CYCLE_DETECTED' || norm === 'DEADLOCK' || norm === 'FAILED') {
+      return {
+        displayState: norm === 'FAILED' ? 'FAILED' : 'CYCLE_DETECTED',
+        stateDotClass: 'bg-error animate-ping',
+        stateTextColor: 'text-error',
+        iconColor: 'text-error',
+        borderColor: 'border-error/30'
+      };
+    }
+    if (norm === 'COMPLETED' || norm === 'COMMITTED') {
+      return {
+        displayState: 'COMMITTED',
+        stateDotClass: 'bg-secondary',
+        stateTextColor: 'text-secondary',
+        iconColor: 'text-secondary',
+        borderColor: 'border-secondary/30'
+      };
+    }
+    return {
+      displayState: norm === 'CREATED' ? 'IDLE' : (norm || 'IDLE'),
+      stateDotClass: 'bg-surface-container-highest',
+      stateTextColor: 'text-outline',
+      iconColor: 'text-outline',
+      borderColor: 'border-surface-container-high'
+    };
+  }
+
   // Render Concurrency Thread Pool Pipeline Board (Vector Flow Board from Stitch)
-  function renderThreadPoolPipeline() {
+  function renderThreadPoolPipeline(concurrencyData) {
     if (!elements.threadPipelineBoard) return;
 
-    const workers = [
-      { id: "T-01", name: "Worker T-01", state: "RUNNING", txn: "TXN-10485", stage: "DB Balance Write", color: "primary" },
-      { id: "T-02", name: "Worker T-02", state: "RUNNING", txn: "TXN-10483", stage: "ACID Validation", color: "primary" },
-      { id: "T-03", name: "Worker T-03", state: "IDLE", txn: "—", stage: "Awaiting Dispatch", color: "outline" },
-      { id: "T-04", name: "Worker T-04", state: "MUTEX_WAIT", txn: "TXN-10482", stage: "Wait Lock ACC-101", color: "tertiary" },
-      { id: "T-05", name: "Worker T-05", state: "COMMITTED", txn: "TXN-10484", stage: "Post-Commit Flush", color: "secondary" },
-      { id: "T-06", name: "Worker T-06", state: "CYCLE_DETECTED", txn: "TXN-10480", stage: "Deadlock Abort/Rollback", color: "error" }
-    ];
+    // Loading / Uninitialized state
+    if (concurrencyData === undefined) {
+      elements.threadPipelineBoard.innerHTML = `
+        <div class="flex items-center justify-center p-6 text-outline font-code-sm text-code-sm">
+          <span class="w-2 h-2 rounded-full bg-primary animate-ping mr-2"></span>
+          Connecting to C++ ConcurrencyManager...
+        </div>
+      `;
+      return;
+    }
 
-    elements.threadPipelineBoard.innerHTML = workers.map(w => {
-      const isRunning = w.state === 'RUNNING';
-      const isWait = w.state === 'MUTEX_WAIT';
-      const isDeadlock = w.state === 'CYCLE_DETECTED';
+    // API Error / Disconnected state
+    if (concurrencyData === null) {
+      elements.threadPipelineBoard.innerHTML = `
+        <div class="flex items-center gap-3 p-4 rounded-DEFAULT bg-error-container/10 border border-error/30 text-error font-body-sm">
+          <span class="material-symbols-outlined text-[20px]">cloud_off</span>
+          <div>
+            <div class="font-semibold text-on-surface">Thread Pool Offline</div>
+            <div class="text-outline text-code-sm font-code-sm">Unable to reach C++ REST API (/api/v1/concurrency/status).</div>
+          </div>
+        </div>
+      `;
+      return;
+    }
 
-      const stateDotClass = isRunning ? 'bg-primary animate-ping' : isWait ? 'bg-tertiary' : isDeadlock ? 'bg-error animate-ping' : 'bg-surface-container-highest';
-      const stateTextColor = isRunning ? 'text-primary' : isWait ? 'text-tertiary' : isDeadlock ? 'text-error' : 'text-outline';
+    const isMock = Boolean(concurrencyData.is_mock);
+    const rawWorkers = Array.isArray(concurrencyData.workers) ? concurrencyData.workers : [];
+
+    // Empty / Idle Worker Pool State
+    if (rawWorkers.length === 0) {
+      const isIdleMessage = concurrencyData.message || 'ConcurrencyManager worker pool is idle or not started.';
+      elements.threadPipelineBoard.innerHTML = `
+        <div class="flex flex-col items-center justify-center p-6 text-center bg-surface-container/30 rounded-DEFAULT border border-dashed border-surface-container-high">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="w-2 h-2 rounded-full bg-outline"></span>
+            <span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Thread Pool Idle (0 Workers Active)</span>
+          </div>
+          <p class="font-body-sm text-body-sm text-outline max-w-md mb-3">
+            ${isIdleMessage} Worker threads are dispatched dynamically during batch transaction processing.
+          </p>
+          <div class="flex items-center gap-2 text-code-sm font-code-sm text-on-surface-variant bg-surface-container-high px-3 py-1.5 rounded-DEFAULT">
+            <span class="material-symbols-outlined text-[16px] text-primary">play_arrow</span>
+            <span>Execute a transfer or click <span class="text-on-surface font-semibold">"Simulate"</span> in the header to activate live workers.</span>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // Optional Demo/Mock banner when in fallback mode
+    const mockBanner = isMock ? `
+      <div class="flex items-center justify-between px-3 py-1.5 rounded-DEFAULT bg-tertiary/10 border border-tertiary/30 text-tertiary text-code-sm font-code-sm mb-2">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-[16px]">science</span>
+          <span class="font-semibold tracking-wider">[DEMO / MOCK]</span>
+          <span>Showing simulated thread pool state (API offline fallback)</span>
+        </div>
+        <span class="text-outline text-[11px] font-code-sm">Simulated Pipeline</span>
+      </div>
+    ` : '';
+
+    // Render actual dynamic workers
+    const rowsHtml = rawWorkers.map(w => {
+      const workerName = w.name || (w.worker_id ? (String(w.worker_id).startsWith('Worker') ? w.worker_id : `Worker ${w.worker_id}`) : 'Worker');
+      const visuals = mapWorkerVisuals(w.state);
+
+      // Parse task and transaction
+      let txn = '—';
+      let stage = 'Awaiting Dispatch';
+
+      if (w.current_task) {
+        const colonIdx = w.current_task.indexOf(':');
+        if (colonIdx !== -1) {
+          txn = w.current_task.substring(0, colonIdx).trim();
+          stage = w.current_task.substring(colonIdx + 1).trim();
+        } else {
+          stage = w.current_task;
+        }
+      } else if (w.current_txn || w.txn) {
+        txn = w.txn || (w.current_txn ? `TXN-${w.current_txn}` : '—');
+        stage = w.stage || 'Processing';
+      }
+
+      const completedBadge = (typeof w.tasks_completed === 'number' && w.tasks_completed > 0)
+        ? `<span class="ml-1 text-[10px] text-outline" title="Tasks Completed">(${w.tasks_completed} done)</span>`
+        : '';
+
+      const mockTag = isMock
+        ? `<span class="text-[9px] px-1 py-0.2 rounded bg-tertiary/20 text-tertiary font-bold ml-1">MOCK</span>`
+        : '';
 
       return `
-        <div class="flex items-center min-w-[750px] gap-2 p-2 rounded-DEFAULT bg-surface-container/60 hover:bg-surface-container transition-colors">
-          <div class="w-32 flex-shrink-0 flex items-center justify-between px-2.5 py-1 bg-surface-container-high rounded-DEFAULT">
-            <span class="font-code-sm text-code-sm font-semibold ${stateTextColor}">${w.name}</span>
-            <span class="w-2 h-2 rounded-full ${stateDotClass}"></span>
+        <div class="flex items-center min-w-[750px] gap-2 p-2 rounded-DEFAULT bg-surface-container/60 hover:bg-surface-container transition-colors border border-transparent hover:${visuals.borderColor}">
+          <div class="w-36 flex-shrink-0 flex items-center justify-between px-2.5 py-1 bg-surface-container-high rounded-DEFAULT">
+            <span class="font-code-sm text-code-sm font-semibold ${visuals.stateTextColor} truncate" title="${workerName}">${workerName}${mockTag}</span>
+            <span class="w-2 h-2 rounded-full ${visuals.stateDotClass}"></span>
           </div>
           <div class="flex items-center text-primary flex-shrink-0 font-code-sm text-code-sm">─────►</div>
-          <div class="px-3 py-1 rounded-DEFAULT bg-surface-container-highest text-on-surface flex items-center gap-2">
+          <div class="px-3 py-1 rounded-DEFAULT bg-surface-container-highest text-on-surface flex items-center gap-2 max-w-[160px] truncate">
             <span class="material-symbols-outlined text-[16px] text-primary">receipt</span>
-            <span class="font-code-sm text-code-sm font-medium">${w.txn}</span>
+            <span class="font-code-sm text-code-sm font-medium truncate" title="${txn}">${txn}</span>
           </div>
           <div class="flex items-center text-primary flex-shrink-0 font-code-sm text-code-sm">─────►</div>
-          <div class="px-3 py-1 rounded-DEFAULT bg-surface-container-highest text-on-surface flex items-center gap-2">
-            <span class="material-symbols-outlined text-[16px] ${w.color === 'error' ? 'text-error' : 'text-secondary'}">account_tree</span>
-            <span class="font-code-sm text-code-sm">${w.stage}</span>
+          <div class="px-3 py-1 rounded-DEFAULT bg-surface-container-highest text-on-surface flex items-center gap-2 flex-1 min-w-0">
+            <span class="material-symbols-outlined text-[16px] ${visuals.iconColor}">account_tree</span>
+            <span class="font-code-sm text-code-sm truncate" title="${stage}">${stage}</span>
+            ${completedBadge}
           </div>
           <div class="flex items-center text-primary flex-shrink-0 font-code-sm text-code-sm">─────►</div>
-          <div class="px-2.5 py-1 rounded-DEFAULT bg-surface-container font-code-sm text-code-sm ${stateTextColor} font-semibold">
-            ${w.state}
+          <div class="px-2.5 py-1 rounded-DEFAULT bg-surface-container font-code-sm text-code-sm ${visuals.stateTextColor} font-semibold flex-shrink-0">
+            ${visuals.displayState}
           </div>
         </div>
       `;
     }).join('');
+
+    elements.threadPipelineBoard.innerHTML = mockBanner + rowsHtml;
   }
 
   // Render Concurrency Locks Table
@@ -637,6 +770,219 @@
     }).join('');
   }
 
+  // Helper: Escape HTML to prevent XSS injection
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // Helper: format transaction identifier for UI consistency
+  function formatTxnId(val) {
+    if (!val) return '—';
+    const s = String(val).trim();
+    if (s.startsWith('TXN-')) return s;
+    if (s.startsWith('T') && /^T\d+$/i.test(s)) return 'TXN-' + s.substring(1);
+    if (/^\d+$/.test(s)) return 'TXN-' + s;
+    return s;
+  }
+
+  // Render Wait-For Graph (WFG) and Deadlock Cycle Analysis
+  function renderWaitForGraph(wfgData, recoveries) {
+    state.wfg = wfgData;
+    if (!elements.wfgEdgesList) return;
+
+    // Loading / Uninitialized state
+    if (wfgData === undefined) {
+      if (elements.wfgCyclePill) {
+        elements.wfgCyclePill.textContent = 'PROBING...';
+        elements.wfgCyclePill.className = 'px-2 py-0.5 rounded-DEFAULT bg-surface-container text-outline font-code-sm text-code-sm border border-surface-container-high';
+      }
+      elements.wfgEdgesList.innerHTML = `
+        <div class="p-3 text-center text-outline font-code-sm text-code-sm">
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-ping inline-block mr-2"></span>
+          Querying Wait-For Graph...
+        </div>
+      `;
+      if (elements.wfgVictimTxn) {
+        elements.wfgVictimTxn.textContent = '—';
+        elements.wfgVictimTxn.className = 'text-outline font-medium';
+      }
+      return;
+    }
+
+    // API Error / Disconnected state
+    if (wfgData === null) {
+      if (elements.wfgCyclePill) {
+        elements.wfgCyclePill.textContent = 'API OFFLINE';
+        elements.wfgCyclePill.className = 'px-2 py-0.5 rounded-DEFAULT bg-error-container/20 text-error font-code-sm text-code-sm border border-error/30';
+      }
+      elements.wfgEdgesList.innerHTML = `
+        <div class="p-3 rounded bg-error-container/10 border border-error/20 text-error font-code-sm text-code-sm flex items-center gap-2">
+          <span class="material-symbols-outlined text-[16px]">cloud_off</span>
+          <span>Failed to query /api/v1/locks/wait-for-graph. Server unreachable.</span>
+        </div>
+      `;
+      if (elements.wfgVictimTxn) {
+        elements.wfgVictimTxn.textContent = 'Unavailable';
+        elements.wfgVictimTxn.className = 'text-error font-medium';
+      }
+      return;
+    }
+
+    const isMock = Boolean(wfgData.is_mock);
+    const edges = Array.isArray(wfgData.edges) ? wfgData.edges : [];
+    const rawCycles = Array.isArray(wfgData.cycles)
+      ? wfgData.cycles
+      : (wfgData.cycle ? [wfgData.cycle] : []);
+    const hasCycle = Boolean(wfgData.has_cycle || wfgData.deadlock_detected || rawCycles.length > 0);
+
+    // Build cycle edge set for fast lookup: "u->v"
+    const cycleEdgeSet = new Set();
+    const cycleVertices = new Set();
+    rawCycles.forEach(cyclePath => {
+      if (!Array.isArray(cyclePath) || cyclePath.length < 2) return;
+      for (let i = 0; i < cyclePath.length - 1; i++) {
+        const u = String(cyclePath[i]);
+        const v = String(cyclePath[i + 1]);
+        cycleEdgeSet.add(`${u}->${v}`);
+        cycleVertices.add(u);
+        cycleVertices.add(v);
+      }
+      const first = String(cyclePath[0]);
+      const last = String(cyclePath[cyclePath.length - 1]);
+      if (first !== last) {
+        cycleEdgeSet.add(`${last}->${first}`);
+      }
+    });
+
+    // 1. Update Cycle Status Pill
+    if (elements.wfgCyclePill) {
+      if (isMock) {
+        elements.wfgCyclePill.textContent = hasCycle
+          ? `[MOCK] CYCLE DETECTED (${rawCycles.length})`
+          : `[MOCK] ACYCLIC`;
+        elements.wfgCyclePill.className = hasCycle
+          ? 'px-2 py-0.5 rounded-DEFAULT bg-tertiary/20 text-tertiary font-code-sm text-code-sm border border-tertiary/40'
+          : 'px-2 py-0.5 rounded-DEFAULT bg-surface-container text-tertiary font-code-sm text-code-sm border border-tertiary/30';
+      } else if (hasCycle) {
+        const countStr = rawCycles.length > 0 ? ` (${rawCycles.length})` : '';
+        elements.wfgCyclePill.textContent = `CYCLE DETECTED${countStr}`;
+        elements.wfgCyclePill.className = 'px-2 py-0.5 rounded-DEFAULT bg-error-container/20 text-error font-code-sm text-code-sm border border-error/40 font-bold animate-pulse';
+      } else if (edges.length === 0) {
+        elements.wfgCyclePill.textContent = 'GRAPH EMPTY • ACYCLIC';
+        elements.wfgCyclePill.className = 'px-2 py-0.5 rounded-DEFAULT bg-surface-container text-outline font-code-sm text-code-sm border border-surface-container-high';
+      } else {
+        elements.wfgCyclePill.textContent = `NO CYCLE • ACYCLIC (${edges.length} ${edges.length === 1 ? 'edge' : 'edges'})`;
+        elements.wfgCyclePill.className = 'px-2 py-0.5 rounded-DEFAULT bg-secondary/10 text-secondary font-code-sm text-code-sm border border-secondary/30 font-semibold';
+      }
+    }
+
+    // 2. Update Recovery Victim
+    if (elements.wfgVictimTxn) {
+      if (hasCycle) {
+        let victim = null;
+        if (Array.isArray(recoveries) && recoveries.length > 0) {
+          victim = recoveries[0].victim_transaction_id || recoveries[0].victim_txn;
+        }
+        if (!victim && wfgData.selected_victim) {
+          victim = wfgData.selected_victim;
+        }
+        if (!victim && cycleVertices.size > 0) {
+          victim = Array.from(cycleVertices)[0];
+        }
+        elements.wfgVictimTxn.textContent = formatTxnId(victim || 'T-Pending');
+        elements.wfgVictimTxn.className = 'text-error font-bold';
+      } else if (edges.length === 0) {
+        elements.wfgVictimTxn.textContent = 'None (0 Waits)';
+        elements.wfgVictimTxn.className = 'text-outline font-medium';
+      } else {
+        elements.wfgVictimTxn.textContent = 'None (No Deadlock)';
+        elements.wfgVictimTxn.className = 'text-secondary font-medium';
+      }
+    }
+
+    // 3. Render Edges List
+    if (edges.length === 0) {
+      elements.wfgEdgesList.innerHTML = `
+        <div class="p-4 rounded bg-surface-container/40 border border-dashed border-surface-container-high flex flex-col items-center justify-center text-center">
+          <div class="flex items-center gap-2 text-on-surface font-medium mb-1">
+            <span class="w-2 h-2 rounded-full bg-secondary"></span>
+            <span>No Active Lock Contention (Wait-For Graph Empty)</span>
+          </div>
+          <p class="text-outline text-body-sm text-[12px] max-w-sm">
+            All transactions executed or committed without lock wait queues.
+            Execute transfers or click <span class="text-on-surface font-semibold">"Simulate"</span> to observe live mutex contention.
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    // Optional Mock Header
+    const mockNotice = isMock ? `
+      <div class="px-2.5 py-1 rounded bg-tertiary/10 border border-tertiary/30 text-tertiary text-[11px] font-semibold mb-1 flex items-center justify-between">
+        <span>[DEMO / MOCK DATA] Fallback simulation graph</span>
+        <span class="text-outline text-[10px]">Simulated WFG</span>
+      </div>
+    ` : '';
+
+    const edgesHtml = edges.map(edge => {
+      const fromRaw = String(edge.from || edge.waiting_tx || '');
+      const toRaw = String(edge.to || edge.holding_tx || '');
+      const fromTx = formatTxnId(fromRaw);
+      const toTx = formatTxnId(toRaw);
+
+      // Determine resource label: check edge.resource, or lookup from active locks
+      let resourceLabel = edge.resource || edge.resource_name || '';
+      if (!resourceLabel && Array.isArray(state.locks)) {
+        const matchingLock = state.locks.find(l => {
+          const h = String(l.holder_txn || '');
+          return (h === toRaw || h === toTx || h.endsWith(toRaw)) &&
+                 Array.isArray(l.waiting_txns) &&
+                 l.waiting_txns.some(w => String(w) === fromRaw || String(w) === fromTx);
+        });
+        if (matchingLock) {
+          resourceLabel = matchingLock.resource;
+        }
+      }
+      if (!resourceLabel) resourceLabel = 'Resource';
+
+      // Check if this edge is part of a deadlock cycle
+      const isCycleEdge = cycleEdgeSet.has(`${fromRaw}->${toRaw}`) ||
+                          cycleEdgeSet.has(`${fromTx}->${toTx}`) ||
+                          (hasCycle && cycleVertices.has(fromRaw) && cycleVertices.has(toRaw));
+
+      if (isCycleEdge) {
+        return `
+          <div class="p-2 rounded bg-error-container/20 border border-error/30 flex items-center justify-between text-error transition-colors">
+            <span class="font-bold flex items-center gap-1.5 truncate">
+              <span class="material-symbols-outlined text-[16px]">sync_problem</span>
+              <span>${escapeHtml(fromTx)} ───waits for ${escapeHtml(resourceLabel)}───► ${escapeHtml(toTx)} [CYCLE EDGE]</span>
+            </span>
+            <span class="px-1.5 py-0.5 bg-error-container text-on-error rounded font-bold text-[10px] flex-shrink-0">DEADLOCK</span>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="p-2 rounded bg-surface-container hover:bg-surface-container-high flex items-center justify-between text-on-surface transition-colors">
+          <span class="flex items-center gap-1.5 truncate">
+            <span class="material-symbols-outlined text-[16px] text-outline">arrow_right_alt</span>
+            <span>${escapeHtml(fromTx)} ───waits for ${escapeHtml(resourceLabel)}───► ${escapeHtml(toTx)}</span>
+          </span>
+          <span class="text-secondary font-medium text-[11px] px-1.5 py-0.5 rounded bg-secondary/10 flex-shrink-0">QUEUED</span>
+        </div>
+      `;
+    }).join('');
+
+    elements.wfgEdgesList.innerHTML = mockNotice + edgesHtml;
+  }
+
   // Render Deadlock Recovery History
   function renderRecoveryHistory(recoveries) {
     state.recoveries = recoveries;
@@ -660,17 +1006,122 @@
     `).join('');
   }
 
-  // Render 64 Frames Grid (OS Paging simulation)
-  function renderFramesGrid() {
-    if (!elements.framesGrid) return;
-    let html = '';
-    for (let i = 0; i < 64; i++) {
-      let bg = 'bg-surface-container-highest';
-      if (i < 42) bg = 'bg-primary';
-      else if (i === 42 || i === 43) bg = 'bg-error';
-      html += `<div class="w-full aspect-square rounded-DEFAULT ${bg} flex items-center justify-center font-code-sm text-[9px] text-surface font-semibold" title="Frame #${i}">${i}</div>`;
+  // Render Paging Simulation Statistics
+  function renderPagingStats(stats) {
+    if (!stats) return;
+
+    const refs = typeof stats.total_references === 'number' ? stats.total_references : 0;
+    const hits = typeof stats.page_hits === 'number' ? stats.page_hits : 0;
+    const faults = typeof stats.page_faults === 'number' ? stats.page_faults : 0;
+
+    let ratioVal = 0.0;
+    if (typeof stats.hit_ratio === 'number') {
+      ratioVal = stats.hit_ratio <= 1.0 ? stats.hit_ratio * 100 : stats.hit_ratio;
+    } else if (refs > 0) {
+      ratioVal = (hits / refs) * 100;
     }
+
+    if (elements.resRefs) elements.resRefs.textContent = refs.toLocaleString();
+    if (elements.resHits) elements.resHits.textContent = hits.toLocaleString();
+    if (elements.resFaults) elements.resFaults.textContent = faults.toLocaleString();
+    if (elements.resRatio) elements.resRatio.textContent = ratioVal.toFixed(1) + '%';
+  }
+
+  // Render Paging Simulation Frame Grid
+  function renderFramesGrid(framesData) {
+    if (!elements.framesGrid) return;
+
+    // Loading / Uninitialized state
+    if (framesData === undefined) {
+      elements.framesGrid.innerHTML = `
+        <div class="col-span-full py-8 text-center text-outline font-code-sm text-code-sm flex items-center justify-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+          <span>Loading Simulated Frame Table...</span>
+        </div>
+      `;
+      return;
+    }
+
+    // API Error / Disconnected state
+    if (framesData === null) {
+      elements.framesGrid.innerHTML = `
+        <div class="col-span-full py-6 text-center text-error font-code-sm text-code-sm flex flex-col items-center justify-center gap-2">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px]">cloud_off</span>
+            <span>Unable to load paging frames (/api/v1/paging/frames)</span>
+          </div>
+          <button onclick="window.PayLockApp.refreshData()" class="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-high text-[11px] font-sans font-medium transition-colors">
+            Retry Fetch
+          </button>
+        </div>
+      `;
+      if (elements.pagingFramesBadge) {
+        elements.pagingFramesBadge.textContent = 'Offline';
+        elements.pagingFramesBadge.className = 'font-code-sm text-code-sm text-error bg-error-container/10 px-2 py-0.5 rounded-DEFAULT border border-error/30';
+      }
+      return;
+    }
+
+    const rawFrames = Array.isArray(framesData.frames)
+      ? framesData.frames
+      : (Array.isArray(framesData) ? framesData : []);
+    const totalFrames = framesData.total_frames || rawFrames.length;
+
+    // Update Frame Table Header
+    if (elements.pagingFrameTitle) {
+      elements.pagingFrameTitle.textContent = `Simulated Frame Table (${totalFrames} Frames)`;
+    }
+
+    // Empty state
+    if (rawFrames.length === 0) {
+      elements.framesGrid.innerHTML = `
+        <div class="col-span-full py-6 text-center text-outline font-code-sm text-code-sm">
+          No memory frames configured in paging simulation model.
+        </div>
+      `;
+      if (elements.pagingFramesBadge) {
+        elements.pagingFramesBadge.textContent = '0 Frames';
+        elements.pagingFramesBadge.className = 'font-code-sm text-code-sm text-outline bg-surface-container px-2 py-0.5 rounded-DEFAULT border border-surface-container-high';
+      }
+      return;
+    }
+
+    let occupiedCount = 0;
+    const html = rawFrames.map(frame => {
+      const idx = typeof frame.frame_index === 'number' ? frame.frame_index : 0;
+      const pageNum = typeof frame.page_number === 'number' ? frame.page_number : -1;
+      const isOccupied = Boolean(frame.is_occupied || pageNum !== -1);
+      const isEvictedOrFault = Boolean(frame.is_fault || frame.is_evicted || frame.state === 'EVICTED');
+
+      if (isOccupied) occupiedCount++;
+
+      let bgClass = 'bg-surface-container-highest text-outline hover:bg-surface-container-high';
+      let titleText = `Frame #${idx}: Free Frame`;
+
+      if (isEvictedOrFault) {
+        bgClass = 'bg-error text-surface font-bold animate-pulse';
+        titleText = `Frame #${idx}: Page #${pageNum} (Evicted/Fault)`;
+      } else if (isOccupied) {
+        bgClass = 'bg-primary text-surface font-semibold hover:opacity-90';
+        titleText = `Frame #${idx}: Page #${pageNum} (Active Cached)`;
+      }
+
+      return `<div class="w-full aspect-square rounded-DEFAULT ${bgClass} flex items-center justify-center font-code-sm text-[9px] cursor-default transition-all" title="${escapeHtml(titleText)}">${idx}</div>`;
+    }).join('');
+
     elements.framesGrid.innerHTML = html;
+
+    if (elements.pagingFramesBadge) {
+      elements.pagingFramesBadge.textContent = `${occupiedCount} / ${totalFrames} Occupied`;
+      elements.pagingFramesBadge.className = occupiedCount > 0
+        ? 'font-code-sm text-code-sm text-primary bg-primary/10 px-2 py-0.5 rounded-DEFAULT border border-primary/30'
+        : 'font-code-sm text-code-sm text-secondary bg-surface-container px-2 py-0.5 rounded-DEFAULT border border-surface-container-high';
+    }
+
+    // Update Overview KPI if present
+    if (elements.kpiPagingVal) {
+      elements.kpiPagingVal.textContent = totalFrames;
+    }
   }
 
   // Transaction Inspector Action
@@ -749,14 +1200,17 @@
   // Refresh All Data from C++ API
   async function refreshData() {
     try {
-      const [health, stats, accounts, txns, locks, wfg, recoveries] = await Promise.all([
+      const [health, stats, accounts, txns, locks, wfg, recoveries, concurrency, pagingFrames, pagingStats] = await Promise.all([
         window.api.getHealth(),
         window.api.getSystemStats(),
         window.api.getAccounts(20),
         window.api.getTransactions(25),
         window.api.getLocks(),
         window.api.getWaitForGraph(),
-        window.api.getRecoveryHistory()
+        window.api.getRecoveryHistory(),
+        window.api.getConcurrencyStatus(),
+        window.api.getPagingFrames(),
+        window.api.getPagingStats()
       ]);
 
       // Update Header & Backend Status indicator
@@ -784,6 +1238,40 @@
       }
       if (locks) renderLocks(locks);
       if (recoveries) renderRecoveryHistory(recoveries);
+      renderWaitForGraph(wfg, recoveries);
+
+      // Render Live Concurrency Thread Pool Pipeline
+      if (concurrency !== undefined) {
+        renderThreadPoolPipeline(concurrency);
+
+        if (elements.concurrencyPoolBadge) {
+          const isMock = concurrency && concurrency.is_mock;
+          const poolCount = concurrency ? (concurrency.pool_size ?? concurrency.worker_count ?? (Array.isArray(concurrency.workers) ? concurrency.workers.length : 0)) : 0;
+          if (isMock) {
+            elements.concurrencyPoolBadge.textContent = `Pool Size: ${poolCount} Workers [DEMO / MOCK]`;
+            elements.concurrencyPoolBadge.className = 'font-code-sm text-code-sm text-tertiary bg-surface-container px-2 py-1 rounded-DEFAULT border border-tertiary/40';
+          } else if (concurrency && concurrency.is_running) {
+            elements.concurrencyPoolBadge.textContent = `Pool Size: ${poolCount} POSIX Workers (Active)`;
+            elements.concurrencyPoolBadge.className = 'font-code-sm text-code-sm text-primary bg-surface-container px-2 py-1 rounded-DEFAULT border border-primary/40';
+          } else {
+            elements.concurrencyPoolBadge.textContent = `Pool Size: 0 Workers (Standby)`;
+            elements.concurrencyPoolBadge.className = 'font-code-sm text-code-sm text-secondary bg-surface-container px-2 py-1 rounded-DEFAULT border border-surface-container-high';
+          }
+        }
+
+        if (concurrency && typeof concurrency.active_workers === 'number') {
+          if (elements.kpiThreadsVal) elements.kpiThreadsVal.textContent = concurrency.active_workers;
+          if (elements.sideWorkersCount) elements.sideWorkersCount.textContent = `${concurrency.active_workers} Active`;
+        }
+      }
+
+      // Render Paging Simulation
+      if (pagingFrames !== undefined) renderFramesGrid(pagingFrames);
+      if (pagingStats) {
+        renderPagingStats(pagingStats);
+      } else if (stats && stats.paging_simulation) {
+        renderPagingStats(stats.paging_simulation);
+      }
     } catch (err) {
       console.warn('PayLock sync notice:', err);
     }
@@ -1109,8 +1597,9 @@
     initElements();
     bindEvents();
     renderNotifications();
-    renderThreadPoolPipeline();
-    renderFramesGrid();
+    renderThreadPoolPipeline(undefined);
+    renderWaitForGraph(undefined);
+    renderFramesGrid(undefined);
 
     // Start Telemetry Clock
     setInterval(updateUptimeClock, 1000);
@@ -1130,7 +1619,11 @@
     inspectTransaction,
     openTransferModal,
     closeTransferModal,
-    refreshData
+    refreshData,
+    renderWaitForGraph,
+    renderThreadPoolPipeline,
+    renderFramesGrid,
+    renderPagingStats
   };
 
   // Launch on DOM ready

@@ -746,8 +746,8 @@
               <p class="font-body-md text-body-md text-outline mt-0.5">Interactive trace of pthread workers, 2PL contention, and WFG cycle resolution</p>
             </div>
             <div class="flex items-center gap-space-sm">
-              <span class="font-code-sm text-code-sm text-secondary bg-surface-container px-2 py-1 rounded-DEFAULT border border-surface-container-high">
-                Pool Size: 24 POSIX Workers
+              <span id="concurrency-pool-size-badge" class="font-code-sm text-code-sm text-secondary bg-surface-container px-2 py-1 rounded-DEFAULT border border-surface-container-high">
+                Pool Size: 0 Workers (Standby)
               </span>
             </div>
           </div>
@@ -815,8 +815,8 @@
                     <p class="font-code-sm text-code-sm text-outline">DFS dependency edges: Ti waits on Tj</p>
                   </div>
                 </div>
-                <div id="wfg-cycle-pill" class="px-2 py-0.5 rounded-DEFAULT bg-tertiary/20 text-tertiary font-code-sm text-code-sm border border-tertiary/30">
-                  CYCLE DETECTED
+                <div id="wfg-cycle-pill" class="px-2 py-0.5 rounded-DEFAULT bg-surface-container text-outline font-code-sm text-code-sm border border-surface-container-high">
+                  INITIALIZING...
                 </div>
               </div>
 
@@ -824,18 +824,7 @@
               <div class="p-space-md rounded-DEFAULT bg-surface-container-low border border-surface-container space-y-space-sm">
                 <div class="font-code-sm text-code-sm text-outline">Active Dependency Edges:</div>
                 <div class="space-y-1 font-code-sm text-code-sm" id="wfg-edges-list">
-                  <div class="p-2 rounded bg-surface-container flex items-center justify-between">
-                    <span class="text-on-surface">TXN-10482 ───waits for ACC-101───► TXN-10485</span>
-                    <span class="text-primary font-medium">GRANTED</span>
-                  </div>
-                  <div class="p-2 rounded bg-surface-container flex items-center justify-between">
-                    <span class="text-on-surface">TXN-10480 ───waits for ACC-104───► TXN-10482</span>
-                    <span class="text-secondary font-medium">QUEUED</span>
-                  </div>
-                  <div class="p-2 rounded bg-error-container/20 border border-error/30 flex items-center justify-between text-error">
-                    <span class="font-bold">TXN-10485 ───waits for ACC-103───► TXN-10480 [CYCLE EDGE]</span>
-                    <span class="px-1 bg-error-container text-on-error rounded">DEADLOCK</span>
-                  </div>
+                  <!-- Dynamically populated by renderWaitForGraph() -->
                 </div>
               </div>
 
@@ -843,7 +832,7 @@
               <div class="p-space-sm rounded-DEFAULT bg-surface-container border border-surface-container-high flex items-center justify-between font-code-sm text-code-sm">
                 <div>
                   <span class="text-outline">Recovery Victim: </span>
-                  <span class="text-error font-bold" id="wfg-victim-txn">TXN-10480</span>
+                  <span class="text-outline font-medium" id="wfg-victim-txn">—</span>
                 </div>
                 <div class="text-right">
                   <span class="text-outline">Algorithm: </span>
@@ -1043,24 +1032,29 @@
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-space-lg">
             <div class="bg-surface-container-lowest p-space-lg rounded-xl border border-surface-container flex flex-col gap-space-md">
-              <h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">LRU Page Replacement</h3>
+              <div class="flex items-center justify-between">
+                <h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">LRU Page Replacement</h3>
+                <span id="paging-simulation-badge" class="font-code-sm text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-outline border border-surface-container-high">SIMULATED OS</span>
+              </div>
               <div class="space-y-space-xs font-code-sm text-code-sm text-outline">
-                <div class="flex justify-between py-1 border-b border-surface-container"><span>Total References:</span> <span class="text-on-surface font-medium" id="res-refs">18,792</span></div>
-                <div class="flex justify-between py-1 border-b border-surface-container"><span>Page Hits:</span> <span class="text-primary font-medium" id="res-hits">18,450</span></div>
-                <div class="flex justify-between py-1 border-b border-surface-container"><span>Page Faults:</span> <span class="text-error font-medium" id="res-faults">342</span></div>
-                <div class="flex justify-between py-1 border-b border-surface-container"><span>Hit Ratio:</span> <span class="text-secondary font-medium" id="res-ratio">98.18%</span></div>
+                <div class="flex justify-between py-1 border-b border-surface-container"><span>Total References:</span> <span class="text-on-surface font-medium" id="res-refs">0</span></div>
+                <div class="flex justify-between py-1 border-b border-surface-container"><span>Page Hits:</span> <span class="text-primary font-medium" id="res-hits">0</span></div>
+                <div class="flex justify-between py-1 border-b border-surface-container"><span>Page Faults:</span> <span class="text-error font-medium" id="res-faults">0</span></div>
+                <div class="flex justify-between py-1 border-b border-surface-container"><span>Hit Ratio:</span> <span class="text-secondary font-medium" id="res-ratio">0.0%</span></div>
               </div>
             </div>
 
             <div class="bg-surface-container-lowest p-space-lg rounded-xl border border-surface-container flex flex-col gap-space-md md:col-span-2">
-              <h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Simulated Frame Table (64 Frames)</h3>
-              <div class="grid grid-cols-8 md:grid-cols-16 gap-1 p-space-sm bg-surface-container-low rounded-DEFAULT" id="frames-grid">
-                <!-- 64 frame boxes generated via JS -->
+              <div class="flex items-center justify-between">
+                <h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold" id="paging-frame-table-title">Simulated Frame Table</h3>
+                <span id="paging-frames-badge" class="font-code-sm text-code-sm text-secondary bg-surface-container px-2 py-0.5 rounded-DEFAULT border border-surface-container-high">0 / 64 Occupied</span>
               </div>
-              <div class="flex items-center gap-space-md font-code-sm text-code-sm text-outline">
+              <div class="grid grid-cols-8 md:grid-cols-16 gap-1 p-space-sm bg-surface-container-low rounded-DEFAULT" id="frames-grid">
+                <!-- Dynamically populated via JS -->
+              </div>
+              <div class="flex items-center gap-space-md font-code-sm text-code-sm text-outline flex-wrap">
                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-DEFAULT bg-primary inline-block"></span> Active Cached</span>
                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-DEFAULT bg-surface-container-highest inline-block"></span> Free Frame</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-DEFAULT bg-error inline-block"></span> Evicted (Fault)</span>
               </div>
             </div>
           </div>
