@@ -41,8 +41,9 @@ void HttpServer::setupMiddleware() {
         res.status = 204;
         res.set_header("Access-Control-Allow-Origin", "*");
         res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Idempotency-Key");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Idempotency-Key, Access-Control-Request-Private-Network");
         res.set_header("Access-Control-Expose-Headers", "Idempotent-Replayed");
+        res.set_header("Access-Control-Allow-Private-Network", "true");
     });
 
     // 2. Pre-routing: Telemetry Logging (only log mutating actions like POST/DELETE to keep console clean)
@@ -57,8 +58,9 @@ void HttpServer::setupMiddleware() {
     server_.set_post_routing_handler([](const httplib::Request&, httplib::Response& res) {
         res.set_header("Access-Control-Allow-Origin", "*");
         res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Idempotency-Key");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Idempotency-Key, Access-Control-Request-Private-Network");
         res.set_header("Access-Control-Expose-Headers", "Idempotent-Replayed");
+        res.set_header("Access-Control-Allow-Private-Network", "true");
     });
 
     // 4. Custom 404 Handler

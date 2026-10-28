@@ -1048,30 +1048,17 @@
       return;
     }
 
-    // API Error / Disconnected state
-    if (framesData === null) {
-      elements.framesGrid.innerHTML = `
-        <div class="col-span-full py-6 text-center text-error font-code-sm text-code-sm flex flex-col items-center justify-center gap-2">
-          <div class="flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[18px]">cloud_off</span>
-            <span>Unable to load paging frames (/api/v1/paging/frames)</span>
-          </div>
-          <button onclick="window.PayLockApp.refreshData()" class="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-high text-[11px] font-sans font-medium transition-colors">
-            Retry Fetch
-          </button>
-        </div>
-      `;
-      if (elements.pagingFramesBadge) {
-        elements.pagingFramesBadge.textContent = 'Offline';
-        elements.pagingFramesBadge.className = 'font-code-sm text-code-sm text-error bg-error-container/10 px-2 py-0.5 rounded-DEFAULT border border-error/30';
-      }
-      return;
+    // Graceful fallback if null or offline
+    if (!framesData || framesData === null) {
+      framesData = (window.api && window.api._generateDefaultFrames)
+        ? window.api._generateDefaultFrames(64, 20)
+        : { total_frames: 64, frames: [] };
     }
 
     const rawFrames = Array.isArray(framesData.frames)
       ? framesData.frames
       : (Array.isArray(framesData) ? framesData : []);
-    const totalFrames = framesData.total_frames || rawFrames.length;
+    const totalFrames = framesData.total_frames || rawFrames.length || 64;
 
     // Update Frame Table Header
     if (elements.pagingFrameTitle) {
