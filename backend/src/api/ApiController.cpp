@@ -1,5 +1,6 @@
 #include "api/ApiController.h"
 #include "api/ApiResponse.h"
+#include "idempotency/IdempotencyManager.h"
 #include "logging/Logger.h"
 #include <algorithm>
 #include <cmath>
@@ -23,7 +24,14 @@ ApiController::ApiController(DatabaseConfig dbConfig,
       recoveryManager_(recoveryManager),
       resourceManager_(resourceManager),
       pagingSimulator_(pagingSimulator),
-      concurrencyManager_(concurrencyManager) {}
+      concurrencyManager_(concurrencyManager) {
+    try {
+        adminDb_.ensureIdempotencyTableExists();
+        adminDb_.cleanupOrphanedProcessingRecords();
+    } catch (const std::exception& ex) {
+        Logger::warn("Notice during ensureIdempotencyTableExists: " + std::string(ex.what()), "ApiController");
+    }
+}
 
 std::optional<int> ApiController::parseAccountId(const nlohmann::json& j, const std::string& key) {
     if (!j.contains(key)) return std::nullopt;
@@ -476,6 +484,16 @@ void ApiController::handleGetTransaction(const httplib::Request& req, httplib::R
 }
 
 void ApiController::handleTransfer(const httplib::Request& req, httplib::Response& res) {
+    std::string idempotencyKey;
+    if (req.has_header("Idempotency-Key")) {
+        idempotencyKey = req.get_header_value("Idempotency-Key");
+        if (!IdempotencyManager::isValidKey(idempotencyKey)) {
+            ApiResponse::sendError(res, "INVALID_IDEMPOTENCY_KEY",
+                "Idempotency-Key header is invalid. It must be a non-empty ASCII string of 1 to 128 printable characters without whitespace.", 400);
+            return;
+        }
+    }
+
     nlohmann::json body;
     try {
         body = nlohmann::json::parse(req.body);
@@ -539,14 +557,44 @@ void ApiController::handleTransfer(const httplib::Request& req, httplib::Respons
     try {
         DatabaseManager requestDb(dbConfig_);
         requestDb.connect();
+
+        if (!idempotencyKey.empty()) {
+            std::string canonical = IdempotencyManager::buildTransferPayload(fromAccount, toAccount, amount);
+            std::string hash = IdempotencyManager::computeSha256(canonical);
+            IdempotencyRecord record;
+            auto claim = IdempotencyManager::claimOrCheck(requestDb, idempotencyKey, "TRANSFER", hash, canonical, record);
+
+            if (claim == IdempotencyClaimResult::CONFLICT) {
+                ApiResponse::sendError(res, "IDEMPOTENCY_CONFLICT",
+                    "Idempotency key '" + idempotencyKey + "' has already been used with a different operation or payload", 409);
+                return;
+            }
+            if (claim == IdempotencyClaimResult::REPLAY_SUCCESS || claim == IdempotencyClaimResult::REPLAY_FAILED) {
+                res.status = (record.responseCode > 0) ? record.responseCode : 200;
+                res.set_header("Content-Type", "application/json");
+                res.set_header("Idempotent-Replayed", "true");
+                res.body = record.responseBody;
+                return;
+            }
+            if (claim == IdempotencyClaimResult::IN_FLIGHT) {
+                ApiResponse::sendError(res, "CONCURRENT_REQUEST_IN_FLIGHT",
+                    "A request with idempotency key '" + idempotencyKey + "' is currently being processed. Please retry shortly.", 409);
+                return;
+            }
+            if (claim == IdempotencyClaimResult::DATABASE_ERROR) {
+                ApiResponse::sendError(res, "DATABASE_ERROR", "Failed to verify or claim idempotency key", 500);
+                return;
+            }
+        }
+
         TransactionManager txMgr(requestDb, &lockManager_);
 
         bool success = txMgr.transfer(fromAccount, toAccount, amount);
         if (success) {
-            auto txList = requestDb.listTransactions();
-            int createdTxId = 0;
-            if (!txList.empty()) {
-                createdTxId = txList.back().transactionId;
+            int createdTxId = txMgr.getLastTransactionId();
+            if (createdTxId <= 0) {
+                auto txList = requestDb.listTransactions();
+                if (!txList.empty()) createdTxId = txList.back().transactionId;
             }
 
             nlohmann::json data = {
@@ -556,18 +604,48 @@ void ApiController::handleTransfer(const httplib::Request& req, httplib::Respons
                 {"amount", amount},
                 {"status", "COMMITTED"}
             };
-            ApiResponse::sendSuccess(res, data, "Transfer completed and committed successfully", 200);
+            std::string resBody = ApiResponse::buildSuccessJson(data, "Transfer completed and committed successfully");
+            if (!idempotencyKey.empty()) {
+                IdempotencyManager::recordCommitted(requestDb, idempotencyKey, 200, resBody, createdTxId);
+            }
+            res.status = 200;
+            res.set_header("Content-Type", "application/json");
+            res.body = resBody;
         } else {
             std::string err = txMgr.getLastError();
             if (err.empty()) err = "Transfer rejected by business rules or insufficient balance";
-            ApiResponse::sendError(res, "TRANSFER_FAILED", err, 409);
+            std::string resBody = ApiResponse::buildErrorJson("TRANSFER_FAILED", err);
+            if (!idempotencyKey.empty()) {
+                IdempotencyManager::recordFailed(requestDb, idempotencyKey, 409, resBody);
+            }
+            res.status = 409;
+            res.set_header("Content-Type", "application/json");
+            res.body = resBody;
         }
     } catch (const std::exception& ex) {
+        if (!idempotencyKey.empty()) {
+            try {
+                DatabaseManager cleanupDb(dbConfig_);
+                cleanupDb.connect();
+                std::string errRes = ApiResponse::buildErrorJson("INTERNAL_ERROR", "Transfer failed: " + std::string(ex.what()));
+                IdempotencyManager::recordFailed(cleanupDb, idempotencyKey, 500, errRes);
+            } catch (...) {}
+        }
         ApiResponse::sendError(res, "INTERNAL_ERROR", "Transaction failed: " + std::string(ex.what()), 500);
     }
 }
 
 void ApiController::handleDeposit(const httplib::Request& req, httplib::Response& res) {
+    std::string idempotencyKey;
+    if (req.has_header("Idempotency-Key")) {
+        idempotencyKey = req.get_header_value("Idempotency-Key");
+        if (!IdempotencyManager::isValidKey(idempotencyKey)) {
+            ApiResponse::sendError(res, "INVALID_IDEMPOTENCY_KEY",
+                "Idempotency-Key header is invalid. It must be a non-empty ASCII string of 1 to 128 printable characters without whitespace.", 400);
+            return;
+        }
+    }
+
     nlohmann::json body;
     try {
         body = nlohmann::json::parse(req.body);
@@ -598,25 +676,94 @@ void ApiController::handleDeposit(const httplib::Request& req, httplib::Response
 
         DatabaseManager requestDb(dbConfig_);
         requestDb.connect();
+
+        if (!idempotencyKey.empty()) {
+            std::string canonical = IdempotencyManager::buildDepositPayload(accountId, amount);
+            std::string hash = IdempotencyManager::computeSha256(canonical);
+            IdempotencyRecord record;
+            auto claim = IdempotencyManager::claimOrCheck(requestDb, idempotencyKey, "DEPOSIT", hash, canonical, record);
+
+            if (claim == IdempotencyClaimResult::CONFLICT) {
+                ApiResponse::sendError(res, "IDEMPOTENCY_CONFLICT",
+                    "Idempotency key '" + idempotencyKey + "' has already been used with a different operation or payload", 409);
+                return;
+            }
+            if (claim == IdempotencyClaimResult::REPLAY_SUCCESS || claim == IdempotencyClaimResult::REPLAY_FAILED) {
+                res.status = (record.responseCode > 0) ? record.responseCode : 200;
+                res.set_header("Content-Type", "application/json");
+                res.set_header("Idempotent-Replayed", "true");
+                res.body = record.responseBody;
+                return;
+            }
+            if (claim == IdempotencyClaimResult::IN_FLIGHT) {
+                ApiResponse::sendError(res, "CONCURRENT_REQUEST_IN_FLIGHT",
+                    "A request with idempotency key '" + idempotencyKey + "' is currently being processed. Please retry shortly.", 409);
+                return;
+            }
+            if (claim == IdempotencyClaimResult::DATABASE_ERROR) {
+                ApiResponse::sendError(res, "DATABASE_ERROR", "Failed to verify or claim idempotency key", 500);
+                return;
+            }
+        }
+
         TransactionManager txMgr(requestDb, &lockManager_);
 
         bool success = txMgr.deposit(accountId, amount);
         if (success) {
+            int createdTxId = txMgr.getLastTransactionId();
+            if (createdTxId <= 0) {
+                auto txList = requestDb.listTransactions();
+                if (!txList.empty()) createdTxId = txList.back().transactionId;
+            }
+
             nlohmann::json data = {
+                {"transaction_id", createdTxId},
                 {"account_id", accountId},
                 {"amount", amount},
                 {"status", "COMMITTED"}
             };
-            ApiResponse::sendSuccess(res, data, "Deposit completed successfully", 200);
+            std::string resBody = ApiResponse::buildSuccessJson(data, "Deposit completed successfully");
+            if (!idempotencyKey.empty()) {
+                IdempotencyManager::recordCommitted(requestDb, idempotencyKey, 200, resBody, createdTxId);
+            }
+            res.status = 200;
+            res.set_header("Content-Type", "application/json");
+            res.body = resBody;
         } else {
-            ApiResponse::sendError(res, "DEPOSIT_FAILED", txMgr.getLastError(), 409);
+            std::string err = txMgr.getLastError();
+            if (err.empty()) err = "Deposit rejected";
+            std::string resBody = ApiResponse::buildErrorJson("DEPOSIT_FAILED", err);
+            if (!idempotencyKey.empty()) {
+                IdempotencyManager::recordFailed(requestDb, idempotencyKey, 409, resBody);
+            }
+            res.status = 409;
+            res.set_header("Content-Type", "application/json");
+            res.body = resBody;
         }
     } catch (const std::exception& ex) {
+        if (!idempotencyKey.empty()) {
+            try {
+                DatabaseManager cleanupDb(dbConfig_);
+                cleanupDb.connect();
+                std::string errRes = ApiResponse::buildErrorJson("INTERNAL_ERROR", "Deposit failed: " + std::string(ex.what()));
+                IdempotencyManager::recordFailed(cleanupDb, idempotencyKey, 500, errRes);
+            } catch (...) {}
+        }
         ApiResponse::sendError(res, "INTERNAL_ERROR", ex.what(), 500);
     }
 }
 
 void ApiController::handleWithdraw(const httplib::Request& req, httplib::Response& res) {
+    std::string idempotencyKey;
+    if (req.has_header("Idempotency-Key")) {
+        idempotencyKey = req.get_header_value("Idempotency-Key");
+        if (!IdempotencyManager::isValidKey(idempotencyKey)) {
+            ApiResponse::sendError(res, "INVALID_IDEMPOTENCY_KEY",
+                "Idempotency-Key header is invalid. It must be a non-empty ASCII string of 1 to 128 printable characters without whitespace.", 400);
+            return;
+        }
+    }
+
     nlohmann::json body;
     try {
         body = nlohmann::json::parse(req.body);
@@ -647,20 +794,79 @@ void ApiController::handleWithdraw(const httplib::Request& req, httplib::Respons
 
         DatabaseManager requestDb(dbConfig_);
         requestDb.connect();
+
+        if (!idempotencyKey.empty()) {
+            std::string canonical = IdempotencyManager::buildWithdrawPayload(accountId, amount);
+            std::string hash = IdempotencyManager::computeSha256(canonical);
+            IdempotencyRecord record;
+            auto claim = IdempotencyManager::claimOrCheck(requestDb, idempotencyKey, "WITHDRAW", hash, canonical, record);
+
+            if (claim == IdempotencyClaimResult::CONFLICT) {
+                ApiResponse::sendError(res, "IDEMPOTENCY_CONFLICT",
+                    "Idempotency key '" + idempotencyKey + "' has already been used with a different operation or payload", 409);
+                return;
+            }
+            if (claim == IdempotencyClaimResult::REPLAY_SUCCESS || claim == IdempotencyClaimResult::REPLAY_FAILED) {
+                res.status = (record.responseCode > 0) ? record.responseCode : 200;
+                res.set_header("Content-Type", "application/json");
+                res.set_header("Idempotent-Replayed", "true");
+                res.body = record.responseBody;
+                return;
+            }
+            if (claim == IdempotencyClaimResult::IN_FLIGHT) {
+                ApiResponse::sendError(res, "CONCURRENT_REQUEST_IN_FLIGHT",
+                    "A request with idempotency key '" + idempotencyKey + "' is currently being processed. Please retry shortly.", 409);
+                return;
+            }
+            if (claim == IdempotencyClaimResult::DATABASE_ERROR) {
+                ApiResponse::sendError(res, "DATABASE_ERROR", "Failed to verify or claim idempotency key", 500);
+                return;
+            }
+        }
+
         TransactionManager txMgr(requestDb, &lockManager_);
 
         bool success = txMgr.withdraw(accountId, amount);
         if (success) {
+            int createdTxId = txMgr.getLastTransactionId();
+            if (createdTxId <= 0) {
+                auto txList = requestDb.listTransactions();
+                if (!txList.empty()) createdTxId = txList.back().transactionId;
+            }
+
             nlohmann::json data = {
+                {"transaction_id", createdTxId},
                 {"account_id", accountId},
                 {"amount", amount},
                 {"status", "COMMITTED"}
             };
-            ApiResponse::sendSuccess(res, data, "Withdrawal completed successfully", 200);
+            std::string resBody = ApiResponse::buildSuccessJson(data, "Withdrawal completed successfully");
+            if (!idempotencyKey.empty()) {
+                IdempotencyManager::recordCommitted(requestDb, idempotencyKey, 200, resBody, createdTxId);
+            }
+            res.status = 200;
+            res.set_header("Content-Type", "application/json");
+            res.body = resBody;
         } else {
-            ApiResponse::sendError(res, "WITHDRAWAL_FAILED", txMgr.getLastError(), 409);
+            std::string err = txMgr.getLastError();
+            if (err.empty()) err = "Withdrawal rejected or insufficient balance";
+            std::string resBody = ApiResponse::buildErrorJson("WITHDRAWAL_FAILED", err);
+            if (!idempotencyKey.empty()) {
+                IdempotencyManager::recordFailed(requestDb, idempotencyKey, 409, resBody);
+            }
+            res.status = 409;
+            res.set_header("Content-Type", "application/json");
+            res.body = resBody;
         }
     } catch (const std::exception& ex) {
+        if (!idempotencyKey.empty()) {
+            try {
+                DatabaseManager cleanupDb(dbConfig_);
+                cleanupDb.connect();
+                std::string errRes = ApiResponse::buildErrorJson("INTERNAL_ERROR", "Withdrawal failed: " + std::string(ex.what()));
+                IdempotencyManager::recordFailed(cleanupDb, idempotencyKey, 500, errRes);
+            } catch (...) {}
+        }
         ApiResponse::sendError(res, "INTERNAL_ERROR", ex.what(), 500);
     }
 }

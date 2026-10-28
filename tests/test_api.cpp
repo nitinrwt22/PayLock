@@ -41,6 +41,7 @@ void runTest(const std::string& testName, const std::function<void()>& fn) {
 
 void resetTestDatabase(paylock::DatabaseManager& db) {
     try {
+        db.executeQuery("DELETE FROM idempotency_records;");
         db.executeQuery("DELETE FROM transaction_logs;");
         db.executeQuery("DELETE FROM transactions;");
         db.executeQuery("ALTER TABLE transactions AUTO_INCREMENT = 1001;");
@@ -506,6 +507,337 @@ int main() {
         auto b102 = adminDb.getAccountBalance(102).value_or(0.0);
         // Before concurrent test: 101 was 9400, 102 was 5600 -> sum = 15000
         assert((b101 + b102) == 15000.0);
+    });
+
+    // ==========================================
+    // 8. Task 4 — Persistent Idempotency Tests
+    // ==========================================
+
+    runTest("[Idempotency] Missing key allows normal payment (backward compatibility)", [&]() {
+        auto initialB101 = adminDb.getAccountBalance(101).value_or(0.0);
+        auto initialB102 = adminDb.getAccountBalance(102).value_or(0.0);
+        json payload = {
+            {"from_account", 101},
+            {"to_account", 102},
+            {"amount", 100.0}
+        };
+        auto res = client.Post("/api/v1/transactions/transfer", payload.dump(), "application/json");
+        assert(res != nullptr && res->status == 200);
+        auto j = json::parse(res->body);
+        assert(j["success"] == true);
+        assert(!res->has_header("Idempotent-Replayed"));
+        assert(adminDb.getAccountBalance(101).value_or(0.0) == initialB101 - 100.0);
+        assert(adminDb.getAccountBalance(102).value_or(0.0) == initialB102 + 100.0);
+    });
+
+    runTest("[Idempotency] Invalid Idempotency-Key headers rejected with HTTP 400", [&]() {
+        json payload = {
+            {"from_account", 101},
+            {"to_account", 102},
+            {"amount", 50.0}
+        };
+        // 1. Whitespace in key
+        httplib::Headers headers1 = {{"Idempotency-Key", "invalid key with spaces"}};
+        auto res1 = client.Post("/api/v1/transactions/transfer", headers1, payload.dump(), "application/json");
+        assert(res1 != nullptr && res1->status == 400);
+        auto j1 = json::parse(res1->body);
+        assert(j1["error"]["code"] == "INVALID_IDEMPOTENCY_KEY");
+
+        // 2. Empty key
+        httplib::Headers headers2 = {{"Idempotency-Key", ""}};
+        auto res2 = client.Post("/api/v1/transactions/transfer", headers2, payload.dump(), "application/json");
+        assert(res2 != nullptr && res2->status == 400);
+        auto j2 = json::parse(res2->body);
+        assert(j2["error"]["code"] == "INVALID_IDEMPOTENCY_KEY");
+
+        // 3. Oversized key (>128 chars)
+        std::string longKey(135, 'k');
+        httplib::Headers headers3 = {{"Idempotency-Key", longKey}};
+        auto res3 = client.Post("/api/v1/transactions/transfer", headers3, payload.dump(), "application/json");
+        assert(res3 != nullptr && res3->status == 400);
+        auto j3 = json::parse(res3->body);
+        assert(j3["error"]["code"] == "INVALID_IDEMPOTENCY_KEY");
+    });
+
+    int originalTxId = 0;
+
+    runTest("[Idempotency] First request with new key executes successfully (Scenario 1)", [&]() {
+        auto initialB101 = adminDb.getAccountBalance(101).value_or(0.0);
+        auto initialB102 = adminDb.getAccountBalance(102).value_or(0.0);
+        json payload = {
+            {"from_account", 101},
+            {"to_account", 102},
+            {"amount", 300.0}
+        };
+        httplib::Headers headers = {{"Idempotency-Key", "transfer-key-001"}};
+        auto res = client.Post("/api/v1/transactions/transfer", headers, payload.dump(), "application/json");
+        assert(res != nullptr && res->status == 200);
+        auto j = json::parse(res->body);
+        assert(j["success"] == true);
+        assert(j["data"]["status"] == "COMMITTED");
+        originalTxId = j["data"]["transaction_id"].get<int>();
+        assert(originalTxId > 0);
+
+        // Verify balances updated in DB
+        assert(adminDb.getAccountBalance(101).value_or(0.0) == initialB101 - 300.0);
+        assert(adminDb.getAccountBalance(102).value_or(0.0) == initialB102 + 300.0);
+
+        // Verify stored in idempotency_records table
+        auto recOpt = adminDb.getIdempotencyRecord("transfer-key-001");
+        assert(recOpt.has_value());
+        assert(recOpt->status == "COMMITTED");
+        assert(recOpt->responseCode == 200);
+        assert(recOpt->transactionId.has_value() && recOpt->transactionId.value() == originalTxId);
+    });
+
+    runTest("[Idempotency] Repeating identical key and payload replays stored outcome without re-execution (Scenario 2)", [&]() {
+        auto initialB101 = adminDb.getAccountBalance(101).value_or(0.0);
+        auto initialB102 = adminDb.getAccountBalance(102).value_or(0.0);
+        size_t initialTxCount = adminDb.listTransactions().size();
+
+        json payload = {
+            {"from_account", 101},
+            {"to_account", 102},
+            {"amount", 300.0}
+        };
+        httplib::Headers headers = {{"Idempotency-Key", "transfer-key-001"}};
+        auto res = client.Post("/api/v1/transactions/transfer", headers, payload.dump(), "application/json");
+        assert(res != nullptr && res->status == 200);
+        assert(res->has_header("Idempotent-Replayed"));
+        assert(res->get_header_value("Idempotent-Replayed") == "true");
+
+        // Verify response body matches original
+        auto j = json::parse(res->body);
+        assert(j["data"]["transaction_id"] == originalTxId);
+        assert(j["data"]["amount"] == 300.0);
+
+        // CRITICAL: Balances must NOT have changed again!
+        assert(adminDb.getAccountBalance(101).value_or(0.0) == initialB101);
+        assert(adminDb.getAccountBalance(102).value_or(0.0) == initialB102);
+
+        // CRITICAL: Transaction count must NOT have increased!
+        assert(adminDb.listTransactions().size() == initialTxCount);
+    });
+
+    runTest("[Idempotency] Reusing key with different amount returns HTTP 409 conflict (Scenario 3)", [&]() {
+        auto initialB101 = adminDb.getAccountBalance(101).value_or(0.0);
+        auto initialB102 = adminDb.getAccountBalance(102).value_or(0.0);
+        size_t initialTxCount = adminDb.listTransactions().size();
+
+        json payload = {
+            {"from_account", 101},
+            {"to_account", 102},
+            {"amount", 777.0} // Different amount
+        };
+        httplib::Headers headers = {{"Idempotency-Key", "transfer-key-001"}};
+        auto res = client.Post("/api/v1/transactions/transfer", headers, payload.dump(), "application/json");
+        assert(res != nullptr && res->status == 409);
+        auto j = json::parse(res->body);
+        assert(j["success"] == false);
+        assert(j["error"]["code"] == "IDEMPOTENCY_CONFLICT");
+
+        // Balances and tx count untouched
+        assert(adminDb.getAccountBalance(101).value_or(0.0) == initialB101);
+        assert(adminDb.getAccountBalance(102).value_or(0.0) == initialB102);
+        assert(adminDb.listTransactions().size() == initialTxCount);
+    });
+
+    runTest("[Idempotency] Reusing key for different operation is rejected with HTTP 409 (Scenario 4)", [&]() {
+        auto initialB101 = adminDb.getAccountBalance(101).value_or(0.0);
+        size_t initialTxCount = adminDb.listTransactions().size();
+
+        // Attempt deposit with transfer-key-001
+        json depPayload = {
+            {"account_id", 101},
+            {"amount", 300.0}
+        };
+        httplib::Headers headers = {{"Idempotency-Key", "transfer-key-001"}};
+        auto resDep = client.Post("/api/v1/transactions/deposit", headers, depPayload.dump(), "application/json");
+        assert(resDep != nullptr && resDep->status == 409);
+        auto jDep = json::parse(resDep->body);
+        assert(jDep["error"]["code"] == "IDEMPOTENCY_CONFLICT");
+
+        // Attempt withdraw with transfer-key-001
+        json withPayload = {
+            {"account_id", 101},
+            {"amount", 300.0}
+        };
+        auto resWith = client.Post("/api/v1/transactions/withdraw", headers, withPayload.dump(), "application/json");
+        assert(resWith != nullptr && resWith->status == 409);
+        auto jWith = json::parse(resWith->body);
+        assert(jWith["error"]["code"] == "IDEMPOTENCY_CONFLICT");
+
+        assert(adminDb.getAccountBalance(101).value_or(0.0) == initialB101);
+        assert(adminDb.listTransactions().size() == initialTxCount);
+    });
+
+    runTest("[Idempotency Concurrency] Concurrent requests with same key do not double-process (Scenario 5)", [&]() {
+        auto initialB101 = adminDb.getAccountBalance(101).value_or(0.0);
+        auto initialB102 = adminDb.getAccountBalance(102).value_or(0.0);
+        size_t initialTxCount = adminDb.listTransactions().size();
+
+        const std::string concurrentKey = "concurrent-transfer-key-999";
+        const double transferAmount = 150.0;
+        json payload = {
+            {"from_account", 101},
+            {"to_account", 102},
+            {"amount", transferAmount}
+        };
+
+        const int NUM_CONCURRENT = 4;
+        std::vector<std::thread> threads;
+        std::vector<int> statusCodes(NUM_CONCURRENT, 0);
+
+        for (int i = 0; i < NUM_CONCURRENT; ++i) {
+            threads.emplace_back([&, i]() {
+                httplib::Client threadClient(TEST_HOST, TEST_PORT);
+                threadClient.set_connection_timeout(std::chrono::seconds(5));
+                threadClient.set_read_timeout(std::chrono::seconds(5));
+                httplib::Headers h = {{"Idempotency-Key", concurrentKey}};
+                auto r = threadClient.Post("/api/v1/transactions/transfer", h, payload.dump(), "application/json");
+                if (r) {
+                    statusCodes[i] = r->status;
+                }
+            });
+        }
+
+        for (auto& t : threads) {
+            t.join();
+        }
+
+        // At least one thread must be HTTP 200
+        int count200 = 0;
+        for (int i = 0; i < NUM_CONCURRENT; ++i) {
+            if (statusCodes[i] == 200) count200++;
+        }
+        assert(count200 >= 1 && "At least one request must succeed");
+
+        // CRITICAL CONCURRENCY INVARIANT:
+        // Account 101 must be debited EXACTLY ONCE for transferAmount (₹150.0)
+        auto finalB101 = adminDb.getAccountBalance(101).value_or(0.0);
+        auto finalB102 = adminDb.getAccountBalance(102).value_or(0.0);
+        assert(finalB101 == (initialB101 - transferAmount));
+        assert(finalB102 == (initialB102 + transferAmount));
+
+        // CRITICAL CONCURRENCY INVARIANT:
+        // Total transactions in MySQL must have increased by EXACTLY 1 (NO double execution)
+        size_t finalTxCount = adminDb.listTransactions().size();
+        assert(finalTxCount == (initialTxCount + 1));
+    });
+
+    runTest("[Idempotency] Failed transaction rolls back and does not leave false success (Scenario 6)", [&]() {
+        auto initialB101 = adminDb.getAccountBalance(101).value_or(0.0);
+        auto initialB102 = adminDb.getAccountBalance(102).value_or(0.0);
+
+        // Attempt transfer of ₹999999 (exceeding balance)
+        json payload = {
+            {"from_account", 101},
+            {"to_account", 102},
+            {"amount", 999999.0}
+        };
+        httplib::Headers headers = {{"Idempotency-Key", "overdraft-key-006"}};
+        auto res = client.Post("/api/v1/transactions/transfer", headers, payload.dump(), "application/json");
+        assert(res != nullptr && res->status == 409);
+        auto j = json::parse(res->body);
+        assert(j["success"] == false);
+
+        // Verify idempotency record in DB is FAILED, not COMMITTED
+        auto recOpt = adminDb.getIdempotencyRecord("overdraft-key-006");
+        assert(recOpt.has_value());
+        assert(recOpt->status == "FAILED");
+        assert(recOpt->responseCode == 409);
+
+        // Repeating request with same key replays failure and does NOT succeed
+        auto res2 = client.Post("/api/v1/transactions/transfer", headers, payload.dump(), "application/json");
+        assert(res2 != nullptr && res2->status == 409);
+        assert(res2->has_header("Idempotent-Replayed"));
+        auto j2 = json::parse(res2->body);
+        assert(j2["success"] == false);
+
+        // Balances remain strictly untouched
+        assert(adminDb.getAccountBalance(101).value_or(0.0) == initialB101);
+        assert(adminDb.getAccountBalance(102).value_or(0.0) == initialB102);
+    });
+
+    runTest("[Idempotency] Different key executes a separate legitimate payment (Scenario 7)", [&]() {
+        auto initialB101 = adminDb.getAccountBalance(101).value_or(0.0);
+        auto initialB102 = adminDb.getAccountBalance(102).value_or(0.0);
+        size_t initialTxCount = adminDb.listTransactions().size();
+
+        json payload = {
+            {"from_account", 101},
+            {"to_account", 102},
+            {"amount", 75.0}
+        };
+        httplib::Headers headers = {{"Idempotency-Key", "legit-new-key-007"}};
+        auto res = client.Post("/api/v1/transactions/transfer", headers, payload.dump(), "application/json");
+        assert(res != nullptr && res->status == 200);
+        auto j = json::parse(res->body);
+        assert(j["success"] == true);
+        assert(!res->has_header("Idempotent-Replayed"));
+
+        // Balances updated
+        assert(adminDb.getAccountBalance(101).value_or(0.0) == initialB101 - 75.0);
+        assert(adminDb.getAccountBalance(102).value_or(0.0) == initialB102 + 75.0);
+        assert(adminDb.listTransactions().size() == initialTxCount + 1);
+    });
+
+    runTest("[Idempotency Deposit & Withdraw] Deposit and withdraw endpoints support persistent idempotency", [&]() {
+        // --- DEPOSIT ---
+        auto initialB103 = adminDb.getAccountBalance(103).value_or(0.0);
+        json depPayload = {{"account_id", 103}, {"amount", 500.0}};
+        httplib::Headers depHeaders = {{"Idempotency-Key", "deposit-key-100"}};
+
+        // 1. First deposit executes
+        auto depRes1 = client.Post("/api/v1/transactions/deposit", depHeaders, depPayload.dump(), "application/json");
+        assert(depRes1 != nullptr && depRes1->status == 200);
+        assert(adminDb.getAccountBalance(103).value_or(0.0) == initialB103 + 500.0);
+
+        // 2. Repeat deposit replays without double-credit
+        auto depRes2 = client.Post("/api/v1/transactions/deposit", depHeaders, depPayload.dump(), "application/json");
+        assert(depRes2 != nullptr && depRes2->status == 200);
+        assert(depRes2->has_header("Idempotent-Replayed"));
+        assert(adminDb.getAccountBalance(103).value_or(0.0) == initialB103 + 500.0);
+
+        // 3. Deposit conflict with different amount
+        json depConflict = {{"account_id", 103}, {"amount", 999.0}};
+        auto depRes3 = client.Post("/api/v1/transactions/deposit", depHeaders, depConflict.dump(), "application/json");
+        assert(depRes3 != nullptr && depRes3->status == 409);
+
+        // --- WITHDRAW ---
+        json withPayload = {{"account_id", 103}, {"amount", 200.0}};
+        httplib::Headers withHeaders = {{"Idempotency-Key", "withdraw-key-200"}};
+
+        // 1. First withdraw executes
+        auto withRes1 = client.Post("/api/v1/transactions/withdraw", withHeaders, withPayload.dump(), "application/json");
+        assert(withRes1 != nullptr && withRes1->status == 200);
+        assert(adminDb.getAccountBalance(103).value_or(0.0) == initialB103 + 500.0 - 200.0);
+
+        // 2. Repeat withdraw replays without double-debit
+        auto withRes2 = client.Post("/api/v1/transactions/withdraw", withHeaders, withPayload.dump(), "application/json");
+        assert(withRes2 != nullptr && withRes2->status == 200);
+        assert(withRes2->has_header("Idempotent-Replayed"));
+        assert(adminDb.getAccountBalance(103).value_or(0.0) == initialB103 + 500.0 - 200.0);
+
+        // 3. Withdraw conflict with different amount
+        json withConflict = {{"account_id", 103}, {"amount", 999.0}};
+        auto withRes3 = client.Post("/api/v1/transactions/withdraw", withHeaders, withConflict.dump(), "application/json");
+        assert(withRes3 != nullptr && withRes3->status == 409);
+    });
+
+    runTest("[Idempotency Recovery] Server startup cleans up dangling PROCESSING records", [&]() {
+        // Insert a simulated stranded in-flight record
+        adminDb.executeQuery("INSERT INTO idempotency_records "
+                             "(idempotency_key, operation_type, request_hash, request_payload, status, created_at) "
+                             "VALUES ('stranded-crash-key', 'TRANSFER', 'fakehash', 'payload', 'PROCESSING', NOW());");
+
+        // Trigger restart cleanup
+        adminDb.cleanupOrphanedProcessingRecords();
+
+        auto recOpt = adminDb.getIdempotencyRecord("stranded-crash-key");
+        assert(recOpt.has_value());
+        assert(recOpt->status == "FAILED");
+        assert(recOpt->responseCode == 500);
     });
 
     runTest("[API Shutdown] Server stop terminates background thread cleanly", [&]() {

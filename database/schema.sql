@@ -8,6 +8,7 @@ CREATE DATABASE IF NOT EXISTS paylock_db;
 USE paylock_db;
 
 -- Drop tables in reverse order of foreign key dependencies
+DROP TABLE IF EXISTS idempotency_records;
 DROP TABLE IF EXISTS transaction_logs;
 DROP TABLE IF EXISTS transactions;
 DROP TABLE IF EXISTS accounts;
@@ -72,3 +73,26 @@ CREATE TABLE transaction_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_logs_transaction FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
+-- ----------------------------------------------------------------------------
+-- 5. Idempotency Records Table
+-- DBMS Concept: At-most-once semantics, Exactly-Once Execution, State Persistence
+-- - Ensures mutating payment operations (transfer, deposit, withdraw) are safely idempotent.
+-- - Fingerprinted by canonical operation payload hash to detect payload conflicts.
+-- - Tracks atomic lifecycle state (PROCESSING -> COMMITTED / FAILED).
+-- ----------------------------------------------------------------------------
+CREATE TABLE idempotency_records (
+    idempotency_key VARCHAR(128) PRIMARY KEY,
+    operation_type VARCHAR(32) NOT NULL,
+    request_hash VARCHAR(64) NOT NULL,
+    request_payload TEXT NOT NULL,
+    status ENUM('PROCESSING', 'COMMITTED', 'FAILED') NOT NULL DEFAULT 'PROCESSING',
+    response_code INT NOT NULL DEFAULT 0,
+    response_body MEDIUMTEXT NULL,
+    transaction_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_idempotency_tx FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id) ON DELETE SET NULL,
+    INDEX idx_idempotency_created (created_at)
+) ENGINE=InnoDB;
+

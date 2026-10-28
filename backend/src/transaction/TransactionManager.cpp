@@ -178,6 +178,7 @@ bool TransactionManager::transfer(int senderAccountId, int receiverAccountId, do
 
         // Step 6f: Commit MySQL transaction (Durability)
         db_.commit();
+        lastTransactionId_ = txId;
         {
             std::lock_guard<std::mutex> lock(abortMutex_);
             committedTransactions_.insert(logicalTxId);
@@ -270,6 +271,7 @@ bool TransactionManager::deposit(int accountId, double amount) {
         Logger::info("Deposit transaction T" + std::to_string(txId) + " committed [State: COMMITTED]", "TransactionManager");
 
         db_.commit();
+        lastTransactionId_ = txId;
         {
             std::lock_guard<std::mutex> lock(abortMutex_);
             committedTransactions_.insert(logicalTxId);
@@ -380,6 +382,7 @@ bool TransactionManager::withdraw(int accountId, double amount) {
         Logger::info("Withdrawal transaction T" + std::to_string(txId) + " committed [State: COMMITTED]", "TransactionManager");
 
         db_.commit();
+        lastTransactionId_ = txId;
         {
             std::lock_guard<std::mutex> lock(abortMutex_);
             committedTransactions_.insert(logicalTxId);

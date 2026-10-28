@@ -69,6 +69,7 @@ public:
 
     // Diagnostics
     std::string getLastError() const;
+    int getLastTransactionId() const noexcept { return lastTransactionId_; }
 
     // Deadlock Abort & Recovery Interfaces (Step 6)
     void requestAbort(int transactionId, const std::string& reason = "Deadlock recovery");
@@ -80,6 +81,7 @@ private:
     DatabaseManager& db_;
     LockManager* lockManager_{nullptr};
     mutable std::string lastError_;
+    mutable int lastTransactionId_{0};
 
     mutable std::mutex abortMutex_;
     std::unordered_map<int, std::string> abortRequests_;

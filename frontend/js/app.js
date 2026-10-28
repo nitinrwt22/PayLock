@@ -1277,6 +1277,11 @@
     }
   }
 
+  // Helper to generate a stable, compliant idempotency key
+  function generateIdempotencyKey(prefix = 'transfer') {
+    return `paylock-${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
+
   // Transfer Form Submission
   async function handleTransferSubmit(e) {
     e.preventDefault();
@@ -1306,8 +1311,15 @@
     elements.modalSubmitText.textContent = 'Processing 2PL...';
     hideModalAlert();
 
+    // Stable Idempotency Key per Logical Payment Attempt:
+    // Reuses the same key across user retries of this attempt.
+    if (!state.currentTransferKey) {
+      state.currentTransferKey = generateIdempotencyKey('transfer');
+    }
+    const idempotencyKey = state.currentTransferKey;
+
     try {
-      const response = await window.api.transfer(fromId, toId, amount);
+      const response = await window.api.transfer(fromId, toId, amount, idempotencyKey);
       const data = response.data || {};
       const newTxnId = data.transaction_id || `TXN-${Math.floor(Math.random() * 1000 + 10500)}`;
 
@@ -1352,11 +1364,14 @@
       renderTransactionsTable(state.transactions);
 
       showToast('Transfer Committed', `Successfully transferred ${formatMoney(amount)} from ACC-${fromId} to ACC-${toId} (ID: ${newTx.id_str})`, 'success');
+      state.currentTransferKey = null; // Clear key on successful commit
       closeTransferModal();
 
       // Refresh data from server or mock
       await refreshData();
     } catch (err) {
+      // NOTE: We deliberately do NOT reset state.currentTransferKey on error.
+      // If the user clicks "Execute Transfer" again to retry, the exact same key is reused!
       const msg = err.message || 'Transaction aborted by backend engine';
       showModalAlert(`Transfer Failed: ${msg}`, 'error');
       showToast('Transaction Rolled Back', msg, 'error');
@@ -1385,6 +1400,7 @@
   function openTransferModal() {
     if (elements.transferModal) {
       hideModalAlert();
+      state.currentTransferKey = generateIdempotencyKey('transfer');
       elements.transferModal.classList.add('open');
       if (elements.modalAmount) elements.modalAmount.focus();
     }
@@ -1394,6 +1410,7 @@
     if (elements.transferModal) {
       elements.transferModal.classList.remove('open');
       hideModalAlert();
+      state.currentTransferKey = null;
     }
   }
 

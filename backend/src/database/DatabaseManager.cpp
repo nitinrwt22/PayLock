@@ -507,4 +507,151 @@ void DatabaseManager::setAutoCommit(bool enable) {
     }
 }
 
+// ----------------------------------------------------------------------------
+// Task 4: Persistent Idempotency Operations
+// ----------------------------------------------------------------------------
+
+void DatabaseManager::ensureIdempotencyTableExists() {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    ensureConnected();
+    const char* sql =
+        "CREATE TABLE IF NOT EXISTS idempotency_records ("
+        "    idempotency_key VARCHAR(128) PRIMARY KEY,"
+        "    operation_type VARCHAR(32) NOT NULL,"
+        "    request_hash VARCHAR(64) NOT NULL,"
+        "    request_payload TEXT NOT NULL,"
+        "    status ENUM('PROCESSING', 'COMMITTED', 'FAILED') NOT NULL DEFAULT 'PROCESSING',"
+        "    response_code INT NOT NULL DEFAULT 0,"
+        "    response_body MEDIUMTEXT NULL,"
+        "    transaction_id INT NULL,"
+        "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+        "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
+        "    CONSTRAINT fk_idempotency_tx FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id) ON DELETE SET NULL,"
+        "    INDEX idx_idempotency_created (created_at)"
+        ") ENGINE=InnoDB;";
+
+    if (mysql_query(conn_, sql) != 0) {
+        throw DatabaseException("Failed to ensure idempotency_records table exists: " + std::string(mysql_error(conn_)), mysql_errno(conn_));
+    }
+}
+
+void DatabaseManager::cleanupOrphanedProcessingRecords() {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    ensureConnected();
+    const char* sql =
+        "UPDATE idempotency_records SET status = 'FAILED', response_code = 500, "
+        "response_body = '{\"error\":{\"code\":\"SERVER_RESTARTED\",\"message\":\"Transaction interrupted by server shutdown or restart\"},\"success\":false}', "
+        "updated_at = NOW() WHERE status = 'PROCESSING';";
+    mysql_query(conn_, sql);
+}
+
+bool DatabaseManager::createIdempotencyRecord(const IdempotencyRecord& record) {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    ensureConnected();
+
+    std::string sql = "INSERT INTO idempotency_records "
+                      "(idempotency_key, operation_type, request_hash, request_payload, status, response_code, created_at) "
+                      "VALUES ('" + escapeString(record.idempotencyKey) + "', '"
+                                  + escapeString(record.operationType) + "', '"
+                                  + escapeString(record.requestHash) + "', '"
+                                  + escapeString(record.requestPayload) + "', '"
+                                  + escapeString(record.status) + "', "
+                                  + std::to_string(record.responseCode) + ", NOW());";
+
+    if (mysql_query(conn_, sql.c_str()) != 0) {
+        unsigned int errNo = mysql_errno(conn_);
+        if (errNo == 1062) { // ER_DUP_ENTRY / Duplicate primary key
+            return false;
+        }
+        throw DatabaseException("Failed to create idempotency record: " + std::string(mysql_error(conn_)), errNo);
+    }
+
+    return mysql_affected_rows(conn_) > 0;
+}
+
+std::optional<IdempotencyRecord> DatabaseManager::getIdempotencyRecord(const std::string& key) {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    ensureConnected();
+
+    std::string sql = "SELECT idempotency_key, operation_type, request_hash, request_payload, "
+                      "status, response_code, response_body, transaction_id, created_at, updated_at "
+                      "FROM idempotency_records WHERE idempotency_key = '" + escapeString(key) + "' LIMIT 1;";
+
+    if (mysql_query(conn_, sql.c_str()) != 0) {
+        throw DatabaseException("Failed to fetch idempotency record: " + std::string(mysql_error(conn_)), mysql_errno(conn_));
+    }
+
+    MYSQL_RES* res = mysql_store_result(conn_);
+    if (!res) {
+        throw DatabaseException("Failed to store result: " + std::string(mysql_error(conn_)), mysql_errno(conn_));
+    }
+
+    MYSQL_ROW row = mysql_fetch_row(res);
+    std::optional<IdempotencyRecord> result = std::nullopt;
+    if (row) {
+        IdempotencyRecord rec;
+        rec.idempotencyKey = row[0] ? row[0] : "";
+        rec.operationType = row[1] ? row[1] : "";
+        rec.requestHash = row[2] ? row[2] : "";
+        rec.requestPayload = row[3] ? row[3] : "";
+        rec.status = row[4] ? row[4] : "PROCESSING";
+        rec.responseCode = row[5] ? std::stoi(row[5]) : 0;
+        rec.responseBody = row[6] ? row[6] : "";
+        if (row[7] != nullptr) {
+            rec.transactionId = std::stoi(row[7]);
+        } else {
+            rec.transactionId = std::nullopt;
+        }
+        rec.createdAt = row[8] ? row[8] : "";
+        rec.updatedAt = row[9] ? row[9] : "";
+        result = rec;
+    }
+
+    mysql_free_result(res);
+    return result;
+}
+
+bool DatabaseManager::commitIdempotencyRecord(const std::string& key, int responseCode, const std::string& responseBody, int transactionId) {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    ensureConnected();
+
+    std::string txIdStr = (transactionId > 0) ? std::to_string(transactionId) : "NULL";
+    std::string sql = "UPDATE idempotency_records SET status = 'COMMITTED', response_code = " + std::to_string(responseCode)
+                    + ", response_body = '" + escapeString(responseBody) + "', transaction_id = " + txIdStr
+                    + ", updated_at = NOW() WHERE idempotency_key = '" + escapeString(key) + "';";
+
+    if (mysql_query(conn_, sql.c_str()) != 0) {
+        throw DatabaseException("Failed to commit idempotency record: " + std::string(mysql_error(conn_)), mysql_errno(conn_));
+    }
+
+    return mysql_affected_rows(conn_) > 0;
+}
+
+bool DatabaseManager::failIdempotencyRecord(const std::string& key, int responseCode, const std::string& responseBody) {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    ensureConnected();
+
+    std::string sql = "UPDATE idempotency_records SET status = 'FAILED', response_code = " + std::to_string(responseCode)
+                    + ", response_body = '" + escapeString(responseBody) + "', updated_at = NOW() WHERE idempotency_key = '"
+                    + escapeString(key) + "';";
+
+    if (mysql_query(conn_, sql.c_str()) != 0) {
+        throw DatabaseException("Failed to mark idempotency record failed: " + std::string(mysql_error(conn_)), mysql_errno(conn_));
+    }
+
+    return mysql_affected_rows(conn_) > 0;
+}
+
+bool DatabaseManager::deleteIdempotencyRecord(const std::string& key) {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    ensureConnected();
+
+    std::string sql = "DELETE FROM idempotency_records WHERE idempotency_key = '" + escapeString(key) + "';";
+    if (mysql_query(conn_, sql.c_str()) != 0) {
+        throw DatabaseException("Failed to delete idempotency record: " + std::string(mysql_error(conn_)), mysql_errno(conn_));
+    }
+
+    return mysql_affected_rows(conn_) > 0;
+}
+
 } // namespace paylock

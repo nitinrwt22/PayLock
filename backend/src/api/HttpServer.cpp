@@ -39,6 +39,7 @@ void HttpServer::setupMiddleware() {
         res.set_header("Access-Control-Allow-Origin", "*");
         res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Idempotency-Key");
+        res.set_header("Access-Control-Expose-Headers", "Idempotent-Replayed");
     });
 
     // 2. Pre-routing: Telemetry Logging (only log mutating actions like POST/DELETE to keep console clean)
@@ -54,6 +55,7 @@ void HttpServer::setupMiddleware() {
         res.set_header("Access-Control-Allow-Origin", "*");
         res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Idempotency-Key");
+        res.set_header("Access-Control-Expose-Headers", "Idempotent-Replayed");
     });
 
     // 4. Custom 404 Handler

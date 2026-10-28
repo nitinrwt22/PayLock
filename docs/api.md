@@ -304,11 +304,13 @@ Retrieves a specific account. Accepts integer IDs (`101`) or formatted string ID
 ### 5.3 Transactions
 
 #### `POST /api/v1/transactions/transfer`
-Executes an atomic transfer between two accounts using the backend's Two-Phase Locking (2PL) Lock Manager and MySQL ACID transaction engine.
+Executes an atomic transfer between two accounts using the backend's Two-Phase Locking (2PL) Lock Manager, MySQL ACID transaction engine, and persistent database-backed idempotency.
 
 - **Request Headers**:
   - `Content-Type: application/json`
-  - `Idempotency-Key`: *(Optional)* Client-generated idempotency key
+  - `Idempotency-Key`: *(Optional)* Client-generated idempotency key (1-128 printable ASCII characters without whitespace). Guarantees at-most-once execution across network retries.
+- **Response Headers**:
+  - `Idempotent-Replayed: true`: Present when the response was replayed from a previously executed request with the same idempotency key.
 - **Request Body**:
   ```json
   {
@@ -318,22 +320,26 @@ Executes an atomic transfer between two accounts using the backend's Two-Phase L
   }
   ```
 - **Validation Rules**:
+  - `Idempotency-Key`: Must be non-empty ASCII string (1-128 chars without whitespace) if provided (`400 Bad Request`, code `INVALID_IDEMPOTENCY_KEY`)
+  - Key reuse with different payload/operation: (`409 Conflict`, code `IDEMPOTENCY_CONFLICT`)
+  - Key currently in-flight by concurrent request: waits up to 2.5s, then returns (`409 Conflict`, code `CONCURRENT_REQUEST_IN_FLIGHT`)
   - Required fields: `from_account`, `to_account`, `amount` (`400 Bad Request` if missing)
   - `amount > 0` and within allowed numeric range (`422 Unprocessable Entity`)
   - `from_account != to_account` (`422 Unprocessable Entity`, code `SELF_TRANSFER`)
   - Both accounts must exist in database (`404 Not Found`)
-  - Sufficient balance available; overdrafts trigger safe MySQL rollback (`409 Conflict`, code `INSUFFICIENT_FUNDS`)
+  - Sufficient balance available; overdrafts trigger safe MySQL rollback (`409 Conflict`, code `INSUFFICIENT_FUNDS` / `TRANSFER_FAILED`)
 - **Sample Request**:
   ```bash
   curl -s -X POST http://127.0.0.1:8080/api/v1/transactions/transfer \
     -H "Content-Type: application/json" \
+    -H "Idempotency-Key: paylock-transfer-101-102-tx99" \
     -d '{"from_account": 101, "to_account": 102, "amount": 500.00}' | jq .
   ```
 - **Response (`200 OK`)**:
   ```json
   {
     "success": true,
-    "message": "Transfer completed successfully",
+    "message": "Transfer completed and committed successfully",
     "data": {
       "transaction_id": 1016,
       "from_account": 101,
@@ -348,15 +354,18 @@ Executes an atomic transfer between two accounts using the backend's Two-Phase L
   {
     "success": false,
     "error": {
-      "code": "INSUFFICIENT_FUNDS",
-      "message": "Insufficient balance in A101 (Available: ₹9400.00, Requested: ₹999999.00)"
+      "code": "TRANSFER_FAILED",
+      "message": "Insufficient funds in Account 101 (Available: ₹9400.00, Requested: ₹999999.00)"
     }
   }
   ```
 
 #### `POST /api/v1/transactions/deposit`
-Credits funds into an existing account.
+Credits funds into an existing account with persistent idempotency support.
 
+- **Request Headers**:
+  - `Content-Type: application/json`
+  - `Idempotency-Key`: *(Optional)* Client-generated idempotency key
 - **Request Body**:
   ```json
   {
@@ -366,8 +375,11 @@ Credits funds into an existing account.
   ```
 
 #### `POST /api/v1/transactions/withdraw`
-Debits funds from an existing account.
+Debits funds from an existing account with persistent idempotency support.
 
+- **Request Headers**:
+  - `Content-Type: application/json`
+  - `Idempotency-Key`: *(Optional)* Client-generated idempotency key
 - **Request Body**:
   ```json
   {

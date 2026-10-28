@@ -17,6 +17,7 @@
 #include "models/Account.h"
 #include "models/Transaction.h"
 #include "models/TransactionLog.h"
+#include "models/IdempotencyRecord.h"
 
 namespace paylock {
 
@@ -110,6 +111,15 @@ public:
     void commit();
     void rollback();
     void setAutoCommit(bool enable);
+
+    // Task 4: Persistent Idempotency Operations
+    void ensureIdempotencyTableExists();
+    void cleanupOrphanedProcessingRecords();
+    bool createIdempotencyRecord(const IdempotencyRecord& record);
+    std::optional<IdempotencyRecord> getIdempotencyRecord(const std::string& key);
+    bool commitIdempotencyRecord(const std::string& key, int responseCode, const std::string& responseBody, int transactionId);
+    bool failIdempotencyRecord(const std::string& key, int responseCode, const std::string& responseBody);
+    bool deleteIdempotencyRecord(const std::string& key);
 
     // Raw Query Utilities
     void executeQuery(const std::string& sql);

@@ -64,6 +64,7 @@ set(PAYLOCK_CORE_SOURCES
     backend/src/recovery/RecoveryManager.cpp
     backend/src/resources/ResourceManager.cpp
     backend/src/resources/PagingSimulator.cpp
+    backend/src/idempotency/IdempotencyManager.cpp
     backend/src/api/ApiController.cpp
     backend/src/api/HttpServer.cpp
 )

@@ -181,7 +181,7 @@ class PayLockApiClient {
     }
   }
 
-  async transfer(fromAccountId, toAccountId, amount) {
+  async transfer(fromAccountId, toAccountId, amount, idempotencyKey = null) {
     const from = parseInt(fromAccountId, 10);
     const to = parseInt(toAccountId, 10);
     const amt = parseFloat(amount);
@@ -194,11 +194,15 @@ class PayLockApiClient {
       to_account_id: to,
       amount: amt
     };
+    const reqOptions = {
+      method: 'POST',
+      body: JSON.stringify(body)
+    };
+    if (idempotencyKey) {
+      reqOptions.headers = { 'Idempotency-Key': idempotencyKey };
+    }
     try {
-      return await this._request('/transactions/transfer', {
-        method: 'POST',
-        body: JSON.stringify(body)
-      });
+      return await this._request('/transactions/transfer', reqOptions);
     } catch (err) {
       const isNetwork = !this.isOnline || (err.message && (err.message.includes('fetch') || err.message.includes('timeout') || err.message.includes('NetworkError')));
       if (isNetwork) {
@@ -231,24 +235,32 @@ class PayLockApiClient {
     }
   }
 
-  async deposit(accountId, amount) {
-    return await this._request('/transactions/deposit', {
+  async deposit(accountId, amount, idempotencyKey = null) {
+    const reqOptions = {
       method: 'POST',
       body: JSON.stringify({
         account_id: parseInt(accountId, 10),
         amount: parseFloat(amount)
       })
-    });
+    };
+    if (idempotencyKey) {
+      reqOptions.headers = { 'Idempotency-Key': idempotencyKey };
+    }
+    return await this._request('/transactions/deposit', reqOptions);
   }
 
-  async withdraw(accountId, amount) {
-    return await this._request('/transactions/withdraw', {
+  async withdraw(accountId, amount, idempotencyKey = null) {
+    const reqOptions = {
       method: 'POST',
       body: JSON.stringify({
         account_id: parseInt(accountId, 10),
         amount: parseFloat(amount)
       })
-    });
+    };
+    if (idempotencyKey) {
+      reqOptions.headers = { 'Idempotency-Key': idempotencyKey };
+    }
+    return await this._request('/transactions/withdraw', reqOptions);
   }
 
   // 4. Concurrency & Locks
