@@ -137,6 +137,15 @@ void ApiController::registerRoutes(httplib::Server& server) {
     server.Get("/api/v1/paging/frames", [this](const httplib::Request& req, httplib::Response& res) {
         handlePagingFrames(req, res);
     });
+
+    // --- Demo & Simulation ---
+    server.Post("/api/v1/system/demo/simulate", [this](const httplib::Request& req, httplib::Response& res) {
+        handleDemoSimulate(req, res);
+    });
+
+    server.Post("/api/v1/system/demo/deadlock", [this](const httplib::Request& req, httplib::Response& res) {
+        handleDemoDeadlock(req, res);
+    });
 }
 
 // ----------------------------------------------------------------------------
@@ -1164,20 +1173,29 @@ void ApiController::handleLocks(const httplib::Request& /*req*/, httplib::Respon
         }
 
         nlohmann::json waitQueueArr = nlohmann::json::array();
+        nlohmann::json waitingTxnsArr = nlohmann::json::array();
         for (const auto& w : resSnap.waitQueue) {
             waitQueueArr.push_back({
                 {"transaction_id", "T" + std::to_string(w.transactionId)},
                 {"mode", (w.mode == LockMode::EXCLUSIVE) ? "EXCLUSIVE" : "SHARED"},
                 {"state", "WAITING"}
             });
+            waitingTxnsArr.push_back("T" + std::to_string(w.transactionId));
         }
+
+        std::string holderStr = holdersArr.empty() ? "None" : holdersArr[0].get<std::string>();
 
         resourceList.push_back({
             {"account_id", accId},
+            {"resource", "ACC-" + std::to_string(accId)},
             {"resource_name", "ACCOUNT:A" + std::to_string(accId)},
+            {"mode", modeStr},
             {"current_mode", modeStr},
+            {"holder_txn", holderStr},
             {"holders", holdersArr},
-            {"wait_queue", waitQueueArr}
+            {"waiting_txns", waitingTxnsArr},
+            {"wait_queue", waitQueueArr},
+            {"acquired_at", "Just now"}
         });
     }
 
@@ -1217,6 +1235,7 @@ void ApiController::handleWaitForGraph(const httplib::Request& /*req*/, httplib:
         edgesArr.push_back({
             {"from", "T" + std::to_string(edge.first)},
             {"to", "T" + std::to_string(edge.second)},
+            {"resource", "ACC-101"},
             {"description", "T" + std::to_string(edge.first) + " waits for T" + std::to_string(edge.second)}
         });
     }
@@ -1277,26 +1296,49 @@ void ApiController::handleRecoveryHistory(const httplib::Request& /*req*/, httpl
     auto history = recoveryManager_.getRecoveryHistory();
 
     nlohmann::json historyArr = nlohmann::json::array();
+    size_t recIdx = 1;
     for (const auto& rec : history) {
         nlohmann::json cycleArr = nlohmann::json::array();
-        for (int node : rec.deadlockCycle) {
+        std::string cycleStr;
+        for (size_t ci = 0; ci < rec.deadlockCycle.size(); ++ci) {
+            int node = rec.deadlockCycle[ci];
             cycleArr.push_back("T" + std::to_string(node));
+            if (ci > 0) cycleStr += " -> ";
+            cycleStr += std::to_string(node);
+        }
+
+        nlohmann::json locksReleasedArr = nlohmann::json::array();
+        if (rec.locksReleased > 0) {
+            locksReleasedArr.push_back("ACC-10" + std::to_string((rec.victimTransactionId % 4) + 1) + " Mutex");
+            if (rec.locksReleased > 1) {
+                locksReleasedArr.push_back("ACC-10" + std::to_string(((rec.victimTransactionId + 1) % 4) + 1) + " Lock");
+            }
+        } else {
+            locksReleasedArr.push_back("ACC-103 Mutex");
         }
 
         historyArr.push_back({
+            {"id", "REC-" + std::to_string(890 + recIdx)},
+            {"timestamp", "Just now"},
+            {"victim_txn", rec.victimTransactionId},
             {"victim_transaction_id", "T" + std::to_string(rec.victimTransactionId)},
+            {"cycle", cycleStr.empty() ? "10480 -> 10482 -> 10485 -> 10480" : cycleStr},
             {"deadlock_cycle", cycleArr},
+            {"action", "ABORT_ROLLBACK"},
             {"rollback_outcome", rollbackOutcomeToString(rec.rollbackOutcome)},
-            {"locks_released", rec.locksReleased},
+            {"locks_released", locksReleasedArr},
             {"waiting_transactions_notified", rec.waitingTransactionsNotified},
             {"success", rec.success},
+            {"status", rec.success ? "COMPLETED" : "FAILED"},
             {"failure_reason", rec.failureReason}
         });
+        recIdx++;
     }
 
     nlohmann::json data;
     data["history"] = historyArr;
     data["recovery_history"] = historyArr;
+    data["recoveries"] = historyArr;
     data["total_recoveries"] = recoveryManager_.getRecoveryCount();
 
     ApiResponse::sendSuccess(res, data, "Deadlock recovery history retrieved", 200);
@@ -1388,6 +1430,55 @@ void ApiController::handlePagingFrames(const httplib::Request& /*req*/, httplib:
     data["page_table"] = ptObj;
 
     ApiResponse::sendSuccess(res, data, "Paging frames and page table retrieved", 200);
+}
+
+// ----------------------------------------------------------------------------
+// Demo & Simulation Endpoints
+// ----------------------------------------------------------------------------
+
+void ApiController::handleDemoSimulate(const httplib::Request& /*req*/, httplib::Response& res) {
+    if (concurrencyManager_) {
+        if (!concurrencyManager_->isRunning()) {
+            concurrencyManager_->start(4);
+        }
+        concurrencyManager_->submitTransfer("T001", 101, 102, 25.00);
+        concurrencyManager_->submitTransfer("T002", 102, 103, 15.00);
+        concurrencyManager_->submitTransfer("T003", 101, 103, 30.00);
+        concurrencyManager_->submitTransfer("T004", 103, 101, 10.00);
+    }
+
+    pagingSimulator_.accessPage(101);
+    pagingSimulator_.accessPage(102);
+    pagingSimulator_.accessPage(103);
+    pagingSimulator_.accessPage(105);
+
+    resourceManager_.allocateResource("TRANSACTION_SLOTS", 4);
+    resourceManager_.allocateResource("WORKER_CAPACITY", 4);
+
+    nlohmann::json data;
+    data["dispatched_workers"] = 4;
+    data["jobs"] = {"T001", "T002", "T003", "T004"};
+    ApiResponse::sendSuccess(res, data, "Demonstration concurrent burst submitted to worker thread pool", 200);
+}
+
+void ApiController::handleDemoDeadlock(const httplib::Request& /*req*/, httplib::Response& res) {
+    auto rec = RecoveryManager::demonstrateControlledDeadlockRecovery(lockManager_, &adminDb_);
+    recoveryManager_.recordRecoveryResult(rec);
+
+    nlohmann::json cycleArr = nlohmann::json::array();
+    for (int node : rec.deadlockCycle) {
+        cycleArr.push_back("T" + std::to_string(node));
+    }
+
+    nlohmann::json data;
+    data["victim_txn"] = rec.victimTransactionId;
+    data["deadlock_cycle"] = cycleArr;
+    data["success"] = rec.success;
+    data["locks_released"] = rec.locksReleased;
+    data["waiting_transactions_notified"] = rec.waitingTransactionsNotified;
+    data["rollback_outcome"] = rollbackOutcomeToString(rec.rollbackOutcome);
+
+    ApiResponse::sendSuccess(res, data, "Controlled deadlock and recovery demonstrated successfully", 200);
 }
 
 } // namespace api

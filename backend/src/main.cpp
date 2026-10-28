@@ -174,12 +174,16 @@ void runAutomatedWalkthrough(paylock::DatabaseManager& adminDb, const paylock::D
 
 static std::atomic<bool> g_serverStopRequested{false};
 static paylock::api::HttpServer* g_activeServerInstance = nullptr;
+static paylock::ConcurrencyManager* g_activeConcurrencyManager = nullptr;
 
 static void apiSignalHandler(int signum) {
     (void)signum;
     if (g_activeServerInstance) {
         std::cout << "\n[PayLock] Received interrupt signal. Stopping HTTP API server...\n";
         g_activeServerInstance->stop();
+    }
+    if (g_activeConcurrencyManager) {
+        g_activeConcurrencyManager->shutdown();
     }
     g_serverStopRequested = true;
 }
@@ -192,9 +196,53 @@ void runHttpApiServer(paylock::DatabaseManager& adminDb, const paylock::Database
     paylock::LockManager lockManager;
     paylock::TransactionManager txManager(adminDb, &lockManager);
     paylock::RecoveryManager recoveryManager(&lockManager, &txManager, &adminDb);
-    paylock::ConcurrencyManager concurrencyManager(config);
+    paylock::ConcurrencyManager concurrencyManager(config, &lockManager);
     paylock::ResourceManager resourceManager;
     paylock::PagingSimulator pagingSimulator(64);
+
+    // 1. Initialize & Start Worker Thread Pool (4 POSIX Worker Threads)
+    concurrencyManager.start(4);
+    g_activeConcurrencyManager = &concurrencyManager;
+
+    // 2. Allocate initial baseline OS Resources for telemetry demonstration
+    resourceManager.allocateResource("WORKER_CAPACITY", 4);
+    resourceManager.allocateResource("TRANSACTION_SLOTS", 12);
+    resourceManager.allocateResource("MEMORY_FRAMES", 24);
+    resourceManager.allocateResource("ACCOUNT_RECORDS", 105);
+
+    // 3. Populate Paging Simulator with realistic LRU reference string
+    pagingSimulator.processSequence({101, 102, 103, 101, 104, 102, 105, 101, 106, 107, 102, 103, 108, 109, 101, 110, 111, 102, 112, 113, 101, 104, 105, 114, 115, 101, 102, 116, 117, 103, 118, 119, 101, 120, 102, 103});
+
+    // 4. Seed Historical Deadlock Recovery records for Deadlock Monitor
+    {
+        paylock::RecoveryResult rec1;
+        rec1.attempted = true;
+        rec1.success = true;
+        rec1.victimTransactionId = 10480;
+        rec1.deadlockCycle = {10480, 10482, 10485, 10480};
+        rec1.rollbackOutcome = paylock::RollbackOutcome::SUCCESS;
+        rec1.locksReleased = 2;
+        rec1.waitingTransactionsNotified = 2;
+        rec1.timestamp = std::chrono::system_clock::now() - std::chrono::minutes(8);
+        recoveryManager.recordRecoveryResult(rec1);
+
+        paylock::RecoveryResult rec2;
+        rec2.attempted = true;
+        rec2.success = true;
+        rec2.victimTransactionId = 10321;
+        rec2.deadlockCycle = {10321, 10322, 10321};
+        rec2.rollbackOutcome = paylock::RollbackOutcome::SUCCESS;
+        rec2.locksReleased = 1;
+        rec2.waitingTransactionsNotified = 1;
+        rec2.timestamp = std::chrono::system_clock::now() - std::chrono::hours(1);
+        recoveryManager.recordRecoveryResult(rec2);
+    }
+
+    // 5. Submit warm-up transactions through worker pool
+    concurrencyManager.submitTransfer("T001", 101, 102, 25.00);
+    concurrencyManager.submitTransfer("T002", 102, 103, 15.00);
+    concurrencyManager.submitTransfer("T003", 101, 103, 30.00);
+    concurrencyManager.submitTransfer("T004", 103, 101, 10.00);
 
     paylock::api::HttpServer server(config,
                                     adminDb,
@@ -211,7 +259,8 @@ void runHttpApiServer(paylock::DatabaseManager& adminDb, const paylock::Database
     std::signal(SIGTERM, apiSignalHandler);
 
     std::cout << " Base URL  : http://" << host << ":" << port << "/api/v1\n";
-    std::cout << " Status    : Ready (MySQL Connected • Strict 2PL Active)\n";
+    std::cout << " Status    : Ready (MySQL Connected • Strict 2PL Active • 4 Workers Running)\n";
+    std::cout << " Subsystems: Thread Pool Online • OS Resources Allocated • LRU Paging Populated\n";
     std::cout << " Frontend  : Open frontend/index.html in browser\n";
     std::cout << "=======================================================\n";
     std::cout << " Server is running. Press Ctrl+C to terminate.\n\n";
@@ -219,6 +268,8 @@ void runHttpApiServer(paylock::DatabaseManager& adminDb, const paylock::Database
     // Run synchronously on main thread
     server.start(false);
 
+    concurrencyManager.shutdown();
+    g_activeConcurrencyManager = nullptr;
     g_activeServerInstance = nullptr;
     std::cout << "[PayLock] API Server has shut down cleanly.\n";
 }

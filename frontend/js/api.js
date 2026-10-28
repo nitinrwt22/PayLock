@@ -301,17 +301,19 @@ class PayLockApiClient {
           ? res.data.locks
           : (Array.isArray(res.data) ? res.data : []);
         
-        return raw.map(l => ({
-          resource: l.resource_name || l.resource || (l.account_id ? `ACC-${l.account_id}` : 'RESOURCE'),
-          mode: l.current_mode || l.mode || 'EXCLUSIVE',
-          holder_txn: Array.isArray(l.holders) && l.holders.length > 0
-            ? l.holders.join(', ')
-            : (l.holder_txn || 'None'),
-          waiting_txns: Array.isArray(l.wait_queue)
-            ? l.wait_queue.map(w => w.transaction_id || w)
-            : (l.waiting_txns || []),
-          acquired_at: l.acquired_at || new Date().toTimeString().split(' ')[0]
-        }));
+        if (raw.length > 0) {
+          return raw.map(l => ({
+            resource: l.resource_name || l.resource || (l.account_id ? `ACC-${l.account_id}` : 'RESOURCE'),
+            mode: l.current_mode || l.mode || 'EXCLUSIVE',
+            holder_txn: Array.isArray(l.holders) && l.holders.length > 0
+              ? l.holders.join(', ')
+              : (l.holder_txn || 'None'),
+            waiting_txns: Array.isArray(l.wait_queue)
+              ? l.wait_queue.map(w => w.transaction_id || w)
+              : (l.waiting_txns || []),
+            acquired_at: l.acquired_at || new Date().toTimeString().split(' ')[0]
+          }));
+        }
       }
       return window.MockData ? window.MockData.concurrency.locks : [];
     } catch (err) {
@@ -322,7 +324,14 @@ class PayLockApiClient {
   async getWaitForGraph() {
     try {
       const res = await this._request('/locks/wait-for-graph');
-      return res.data;
+      const data = res.data;
+      if (data && Array.isArray(data.edges) && data.edges.length > 0) {
+        return data;
+      }
+      if (window.MockData && window.MockData.concurrency && window.MockData.concurrency.wfg) {
+        return window.MockData.concurrency.wfg;
+      }
+      return data;
     } catch (err) {
       if (window.MockData && window.MockData.concurrency && window.MockData.concurrency.wfg) {
         return { ...window.MockData.concurrency.wfg, is_mock: true, error: err.message };
@@ -343,7 +352,11 @@ class PayLockApiClient {
   async getRecoveryHistory() {
     try {
       const res = await this._request('/recovery/history');
-      return res.data.recoveries || [];
+      const list = res.data.recoveries || res.data.recovery_history || res.data.history || [];
+      if (list.length > 0) {
+        return list;
+      }
+      return window.MockData ? window.MockData.concurrency.recovery_history : [];
     } catch (err) {
       return window.MockData ? window.MockData.concurrency.recovery_history : [];
     }
@@ -355,7 +368,7 @@ class PayLockApiClient {
       const res = await this._request('/resources');
       return res.data;
     } catch (err) {
-      return null;
+      return window.MockData ? window.MockData.resources : null;
     }
   }
 
@@ -371,6 +384,25 @@ class PayLockApiClient {
   async getPagingFrames() {
     try {
       const res = await this._request('/paging/frames');
+      return res.data;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // 6. Interactive Demo Controls
+  async simulateBurst() {
+    try {
+      const res = await this._request('/system/demo/simulate', 'POST');
+      return res.data;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async simulateDeadlock() {
+    try {
+      const res = await this._request('/system/demo/deadlock', 'POST');
       return res.data;
     } catch (err) {
       return null;

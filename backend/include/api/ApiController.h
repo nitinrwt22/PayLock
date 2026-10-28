@@ -81,6 +81,10 @@ public:
     void handlePagingStats(const httplib::Request& req, httplib::Response& res);
     void handlePagingFrames(const httplib::Request& req, httplib::Response& res);
 
+    // H. Demo & Simulation Endpoints
+    void handleDemoSimulate(const httplib::Request& req, httplib::Response& res);
+    void handleDemoDeadlock(const httplib::Request& req, httplib::Response& res);
+
 private:
     DatabaseConfig dbConfig_;
     DatabaseManager& adminDb_;

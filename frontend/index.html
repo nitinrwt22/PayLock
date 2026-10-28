@@ -745,7 +745,15 @@
               <h1 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight mt-0.5">Concurrency Monitor & Thread Pool</h1>
               <p class="font-body-md text-body-md text-outline mt-0.5">Interactive trace of pthread workers, 2PL contention, and WFG cycle resolution</p>
             </div>
-            <div class="flex items-center gap-space-sm">
+            <div class="flex items-center gap-space-sm flex-wrap">
+              <button id="run-deadlock-demo-btn" class="px-space-sm py-1 rounded-DEFAULT bg-error-container/20 hover:bg-error-container/40 text-error font-code-sm text-code-sm border border-error/30 flex items-center gap-1.5 transition-all" title="Trigger real DFS circular wait detection and victim rollback">
+                <span class="material-symbols-outlined text-[16px]">play_circle</span>
+                <span>Run Deadlock Demo</span>
+              </button>
+              <button id="run-traffic-sim-btn" class="px-space-sm py-1 rounded-DEFAULT bg-primary-container hover:bg-primary text-on-primary-container hover:text-on-primary font-code-sm text-code-sm font-medium flex items-center gap-1.5 transition-all" title="Dispatch 4 concurrent ACID transfers to worker thread pool">
+                <span class="material-symbols-outlined text-[16px]">bolt</span>
+                <span>Simulate 4 Workers</span>
+              </button>
               <span id="concurrency-pool-size-badge" class="font-code-sm text-code-sm text-secondary bg-surface-container px-2 py-1 rounded-DEFAULT border border-surface-container-high">
                 Pool Size: 0 Workers (Standby)
               </span>
@@ -1056,6 +1064,41 @@
                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-DEFAULT bg-primary inline-block"></span> Active Cached</span>
                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-DEFAULT bg-surface-container-highest inline-block"></span> Free Frame</span>
               </div>
+            </div>
+          </div>
+
+          <!-- Logical OS Resource Management & Admission Control Table -->
+          <div class="bg-surface-container-lowest p-space-lg rounded-xl border border-surface-container flex flex-col gap-space-md shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-space-xs gap-space-sm border-b border-surface-container/60">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-primary text-[22px]">memory</span>
+                <div>
+                  <h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold tracking-tight">Logical OS Resource Allocation & Admission Control</h2>
+                  <p class="font-code-sm text-code-sm text-outline">Real-time allocation limits, capacity tracking, and starvation prevention</p>
+                </div>
+              </div>
+              <span id="os-resources-summary-badge" class="font-code-sm text-code-sm text-primary bg-primary/10 px-2.5 py-1 rounded-DEFAULT border border-primary/30">
+                4 Resources Managed
+              </span>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left font-body-sm text-body-sm">
+                <thead class="bg-surface-container-low border-b border-surface-container">
+                  <tr class="font-label-caps text-label-caps text-outline uppercase tracking-wider">
+                    <th class="py-2.5 px-4">Resource ID</th>
+                    <th class="py-2.5 px-4">Type</th>
+                    <th class="py-2.5 px-4">Total Capacity</th>
+                    <th class="py-2.5 px-4">Allocated</th>
+                    <th class="py-2.5 px-4">Available</th>
+                    <th class="py-2.5 px-4">Utilization</th>
+                    <th class="py-2.5 px-4 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="os-resources-table-body" class="divide-y divide-surface-container/50">
+                  <!-- Populated dynamically via JS -->
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

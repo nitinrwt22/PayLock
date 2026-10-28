@@ -92,6 +92,7 @@ public:
     size_t getRecoveryCount() const noexcept;
     void resetRecoveryCount() noexcept;
     std::vector<RecoveryResult> getRecoveryHistory() const;
+    void recordRecoveryResult(const RecoveryResult& result);
 
     // Controlled Deadlock Recovery Demonstration Fixture (Step 6)
     static RecoveryResult demonstrateControlledDeadlockRecovery(LockManager& lm, DatabaseManager* db = nullptr);

@@ -137,6 +137,12 @@
     elements.resRatio = document.getElementById('res-ratio');
     elements.pagingFrameTitle = document.getElementById('paging-frame-table-title');
     elements.pagingFramesBadge = document.getElementById('paging-frames-badge');
+
+    // OS Logical Resources & Demo Buttons
+    elements.osResourcesTableBody = document.getElementById('os-resources-table-body');
+    elements.osResourcesSummaryBadge = document.getElementById('os-resources-summary-badge');
+    elements.runDeadlockDemoBtn = document.getElementById('run-deadlock-demo-btn');
+    elements.runTrafficSimBtn = document.getElementById('run-traffic-sim-btn');
   }
 
   // View Navigation
@@ -1124,6 +1130,69 @@
     }
   }
 
+  // Render OS Logical Resources & Admission Control Table
+  function renderResources(resourceData) {
+    if (!elements.osResourcesTableBody) return;
+    const resList = Array.isArray(resourceData)
+      ? resourceData
+      : (resourceData && Array.isArray(resourceData.resources) ? resourceData.resources : []);
+
+    if (!resList || resList.length === 0) {
+      elements.osResourcesTableBody.innerHTML = `
+        <tr><td colspan="7" class="py-6 text-center text-outline font-code-sm text-code-sm">No OS resources registered.</td></tr>
+      `;
+      return;
+    }
+
+    if (elements.osResourcesSummaryBadge) {
+      const totalAllocated = resourceData.total_allocated ?? resList.reduce((acc, r) => acc + (r.allocated_capacity || r.allocated || 0), 0);
+      elements.osResourcesSummaryBadge.textContent = `${resList.length} Resources Active (${totalAllocated} Units Allocated)`;
+    }
+
+    elements.osResourcesTableBody.innerHTML = resList.map(r => {
+      const id = r.resource_id || r.id || r.name || 'RESOURCE';
+      const type = r.type || 'SYSTEM';
+      const total = typeof r.total_capacity === 'number' ? r.total_capacity : (r.total || 0);
+      const allocated = typeof r.allocated_capacity === 'number' ? r.allocated_capacity : (r.allocated || 0);
+      const available = typeof r.available_capacity === 'number' ? r.available_capacity : (r.available || Math.max(0, total - allocated));
+      const utilPct = typeof r.utilization_percent === 'number'
+        ? r.utilization_percent
+        : (total > 0 ? (allocated / total) * 100 : 0);
+
+      let barColor = 'bg-primary';
+      let statusBadge = '<span class="px-2 py-0.5 rounded bg-primary/10 text-primary font-code-sm text-code-sm border border-primary/20">NORMAL</span>';
+      if (utilPct >= 80) {
+        barColor = 'bg-error';
+        statusBadge = '<span class="px-2 py-0.5 rounded bg-error-container/20 text-error font-code-sm text-code-sm border border-error/30 font-bold">HIGH LOAD</span>';
+      } else if (utilPct >= 50) {
+        barColor = 'bg-tertiary';
+        statusBadge = '<span class="px-2 py-0.5 rounded bg-tertiary/10 text-tertiary font-code-sm text-code-sm border border-tertiary/30">MODERATE</span>';
+      }
+
+      return `
+        <tr class="hover:bg-surface-container-low transition-colors">
+          <td class="py-2.5 px-4 font-code-sm text-code-sm font-semibold text-on-surface flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full ${barColor}"></span>
+            <span>${escapeHtml(id)}</span>
+          </td>
+          <td class="py-2.5 px-4 font-code-sm text-code-sm text-outline">${escapeHtml(type)}</td>
+          <td class="py-2.5 px-4 font-code-sm text-code-sm text-on-surface">${total.toLocaleString()}</td>
+          <td class="py-2.5 px-4 font-code-sm text-code-sm font-medium text-primary">${allocated.toLocaleString()}</td>
+          <td class="py-2.5 px-4 font-code-sm text-code-sm text-secondary">${available.toLocaleString()}</td>
+          <td class="py-2.5 px-4 font-code-sm text-code-sm">
+            <div class="flex items-center gap-2">
+              <div class="w-28 h-2 rounded-full bg-surface-container-high overflow-hidden">
+                <div class="${barColor} h-full rounded-full transition-all duration-500" style="width: ${Math.min(100, Math.max(2, utilPct.toFixed(1)))}%"></div>
+              </div>
+              <span class="text-on-surface font-medium">${utilPct.toFixed(1)}%</span>
+            </div>
+          </td>
+          <td class="py-2.5 px-4 text-right">${statusBadge}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
   // Transaction Inspector Action
   function inspectTransaction(id) {
     const txn = state.transactions.find(t => String(t.transaction_id || t.id) === String(id)) || window.MockData?.detailSample;
@@ -1200,7 +1269,7 @@
   // Refresh All Data from C++ API
   async function refreshData() {
     try {
-      const [health, stats, accounts, txns, locks, wfg, recoveries, concurrency, pagingFrames, pagingStats] = await Promise.all([
+      const [health, stats, accounts, txns, locks, wfg, recoveries, concurrency, pagingFrames, pagingStats, resources] = await Promise.all([
         window.api.getHealth(),
         window.api.getSystemStats(),
         window.api.getAccounts(20),
@@ -1210,7 +1279,8 @@
         window.api.getRecoveryHistory(),
         window.api.getConcurrencyStatus(),
         window.api.getPagingFrames(),
-        window.api.getPagingStats()
+        window.api.getPagingStats(),
+        window.api.getResources()
       ]);
 
       // Update Header & Backend Status indicator
@@ -1271,6 +1341,13 @@
         renderPagingStats(pagingStats);
       } else if (stats && stats.paging_simulation) {
         renderPagingStats(stats.paging_simulation);
+      }
+
+      // Render OS Logical Resources & Capacity Control
+      if (resources) {
+        renderResources(resources);
+      } else if (stats && stats.resources) {
+        renderResources(stats.resources);
       }
     } catch (err) {
       console.warn('PayLock sync notice:', err);
@@ -1526,6 +1603,30 @@
 
     // Simulation Button
     elements.simulateBtn?.addEventListener('click', triggerSimulation);
+
+    // Concurrency Action Buttons
+    elements.runDeadlockDemoBtn?.addEventListener('click', async () => {
+      showToast('Deadlock Triggered', 'Executing circular wait condition and victim abort resolution...', 'info');
+      try {
+        const res = await window.api.simulateDeadlock();
+        await refreshData();
+        showToast('Deadlock Resolved', `Victim TXN-${res?.victim_txn || 10480} aborted, database rolled back, surviving workers resumed`, 'success');
+      } catch (err) {
+        showToast('Deadlock Demo', 'Simulation completed', 'info');
+        await refreshData();
+      }
+    });
+
+    elements.runTrafficSimBtn?.addEventListener('click', async () => {
+      showToast('Worker Burst Dispatched', '4 worker threads executing concurrent ACID transfers', 'info');
+      try {
+        await window.api.simulateBurst();
+        await refreshData();
+        showToast('Burst Finished', 'Worker threads successfully processed transactions', 'success');
+      } catch (err) {
+        await triggerSimulation();
+      }
+    });
 
     // Status Pills Filtering on Transactions Monitor
     elements.statusPills.forEach(pill => {

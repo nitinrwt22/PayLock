@@ -289,6 +289,12 @@ std::vector<RecoveryResult> RecoveryManager::getRecoveryHistory() const {
     return recoveryHistory_;
 }
 
+void RecoveryManager::recordRecoveryResult(const RecoveryResult& result) {
+    std::lock_guard<std::mutex> lock(recoveryMutex_);
+    recoveryHistory_.push_back(result);
+    totalRecoveries_++;
+}
+
 RecoveryResult RecoveryManager::demonstrateControlledDeadlockRecovery(LockManager& lm, DatabaseManager* db) {
     Logger::info("Starting Controlled Deadlock Recovery Demonstration...", "RecoveryManager");
 
