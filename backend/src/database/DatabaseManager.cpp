@@ -13,6 +13,12 @@ DatabaseConfig DatabaseConfig::fromEnvOrDefault() {
     if (const char* envPass = std::getenv("PAYLOCK_DB_PASS")) cfg.password = envPass;
     if (const char* envDb   = std::getenv("PAYLOCK_DB_NAME")) cfg.database = envDb;
     if (const char* envPort = std::getenv("PAYLOCK_DB_PORT")) cfg.port = static_cast<unsigned int>(std::stoi(envPort));
+    if (const char* envPool = std::getenv("PAYLOCK_DB_POOL_SIZE")) {
+        try { cfg.poolSize = static_cast<size_t>(std::stoul(envPool)); } catch (...) {}
+    }
+    if (const char* envTimeout = std::getenv("PAYLOCK_DB_POOL_TIMEOUT_MS")) {
+        try { cfg.poolTimeoutMs = static_cast<unsigned int>(std::stoul(envTimeout)); } catch (...) {}
+    }
     return cfg;
 }
 
@@ -97,6 +103,29 @@ bool DatabaseManager::isConnected() noexcept {
 
 MYSQL* DatabaseManager::getRawConnection() noexcept {
     return conn_;
+}
+
+bool DatabaseManager::resetSession() noexcept {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    if (!conn_) return false;
+
+    // mysql_reset_connection is the official MySQL C API for connection pool reuse:
+    // It natively rolls back active transactions, resets autocommit mode, releases table
+    // locks, drops temporary tables, and clears session and user-defined variables.
+    if (mysql_reset_connection(conn_) == 0) {
+        return true;
+    }
+
+    // Fallback for older servers or if mysql_reset_connection returned non-zero
+    mysql_query(conn_, "ROLLBACK;");
+    mysql_autocommit(conn_, 1);
+    return (mysql_ping(conn_) == 0);
+}
+
+bool DatabaseManager::ping() noexcept {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    if (!conn_) return false;
+    return (mysql_ping(conn_) == 0);
 }
 
 void DatabaseManager::ensureConnected() {
@@ -248,6 +277,22 @@ std::vector<Account> DatabaseManager::listAccounts() {
 
 bool DatabaseManager::accountExists(int accountId) {
     return getAccountById(accountId).has_value();
+}
+
+bool DatabaseManager::userExists(int userId) {
+    std::lock_guard<std::mutex> lock(dbMutex_);
+    ensureConnected();
+
+    std::string sql = "SELECT 1 FROM users WHERE user_id = " + std::to_string(userId) + " LIMIT 1;";
+    if (mysql_query(conn_, sql.c_str()) != 0) {
+        throw DatabaseException("Failed to check user existence: " + std::string(mysql_error(conn_)), mysql_errno(conn_));
+    }
+
+    MYSQL_RES* res = mysql_store_result(conn_);
+    if (!res) return false;
+    bool exists = (mysql_num_rows(res) > 0);
+    mysql_free_result(res);
+    return exists;
 }
 
 std::vector<Transaction> DatabaseManager::listTransactions() {

@@ -56,6 +56,7 @@ set(PAYLOCK_CORE_SOURCES
     backend/src/models/Account.cpp
     backend/src/models/Transaction.cpp
     backend/src/database/DatabaseManager.cpp
+    backend/src/database/ConnectionPool.cpp
     backend/src/transaction/TransactionManager.cpp
     backend/src/concurrency/ConcurrentTransactionProcessor.cpp
     backend/src/concurrency/ConcurrencyManager.cpp

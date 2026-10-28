@@ -6,6 +6,7 @@
 #include <thread>
 #include <atomic>
 #include <httplib.h>
+#include "database/ConnectionPool.h"
 #include "api/ApiController.h"
 
 namespace paylock {
@@ -25,7 +26,8 @@ public:
                PagingSimulator& pagingSimulator,
                ConcurrencyManager* concurrencyManager = nullptr,
                std::string host = "127.0.0.1",
-               int port = 8080);
+               int port = 8080,
+               std::shared_ptr<ConnectionPool> pool = nullptr);
 
     ~HttpServer();
 
@@ -49,12 +51,14 @@ public:
     std::string getHost() const { return host_; }
     int getPort() const { return port_; }
     std::string getBaseUrl() const;
+    std::shared_ptr<ConnectionPool> getConnectionPool() const noexcept { return pool_; }
 
 private:
     std::string host_;
     int port_;
     std::atomic<bool> isRunning_{false};
 
+    std::shared_ptr<ConnectionPool> pool_;
     httplib::Server server_;
     std::unique_ptr<ApiController> controller_;
     std::thread serverThread_;

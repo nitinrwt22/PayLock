@@ -14,16 +14,19 @@ HttpServer::HttpServer(DatabaseConfig dbConfig,
                        PagingSimulator& pagingSimulator,
                        ConcurrencyManager* concurrencyManager,
                        std::string host,
-                       int port)
+                       int port,
+                       std::shared_ptr<ConnectionPool> pool)
     : host_(std::move(host)),
       port_(port),
+      pool_(pool ? pool : std::make_shared<ConnectionPool>(dbConfig)),
       controller_(std::make_unique<ApiController>(std::move(dbConfig),
                                                   adminDb,
                                                   lockManager,
                                                   recoveryManager,
                                                   resourceManager,
                                                   pagingSimulator,
-                                                  concurrencyManager)) {
+                                                  concurrencyManager,
+                                                  pool_)) {
     setupMiddleware();
     controller_->registerRoutes(server_);
 }
@@ -110,6 +113,13 @@ void HttpServer::stop() {
 
     if (serverThread_.joinable()) {
         serverThread_.join();
+    }
+
+    if (controller_) {
+        controller_->shutdownPool();
+    }
+    if (pool_) {
+        pool_->shutdown();
     }
 
     isRunning_ = false;

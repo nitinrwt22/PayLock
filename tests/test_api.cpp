@@ -1,5 +1,6 @@
 #include "api/HttpServer.h"
 #include "database/DatabaseManager.h"
+#include "database/ConnectionPool.h"
 #include "transaction/TransactionManager.h"
 #include "concurrency/ConcurrencyManager.h"
 #include "locking/LockManager.h"
@@ -8,6 +9,7 @@
 #include "resources/ResourceManager.h"
 #include "resources/PagingSimulator.h"
 #include "logging/Logger.h"
+#include <unordered_set>
 
 #include <iostream>
 #include <iomanip>
@@ -179,6 +181,163 @@ int main() {
         auto j = json::parse(res->body);
         assert(j["success"] == false);
         assert(j["error"]["code"] == "INVALID_ACCOUNT_ID");
+    });
+
+    // ==========================================
+    // 2.1 Account Creation Tests (Task 6)
+    // ==========================================
+
+    runTest("[API Account Creation] Valid account created with 201 Created and correct fields", [&]() {
+        adminDb.executeQuery("DELETE FROM accounts WHERE account_id = 888;");
+        json body = {
+            {"account_id", 888},
+            {"user_id", 1},
+            {"initial_balance", 2500.50}
+        };
+        auto res = client.Post("/api/v1/accounts", body.dump(), "application/json");
+        assert(res != nullptr && res->status == 201);
+        auto j = json::parse(res->body);
+        assert(j["success"] == true);
+        assert(j["message"] == "Account created successfully");
+        assert(j["data"]["account_id"] == 888);
+        assert(j["data"]["user_id"] == 1);
+        assert(j["data"]["balance"] == 2500.50);
+        assert(j["data"]["owner_name"] == "Nitin");
+        assert(j["data"].contains("created_at"));
+    });
+
+    runTest("[API Account Creation] Created account appears in GET /api/v1/accounts listing", [&]() {
+        auto res = client.Get("/api/v1/accounts?limit=100");
+        assert(res != nullptr && res->status == 200);
+        auto j = json::parse(res->body);
+        bool found = false;
+        for (const auto& acc : j["data"]["accounts"]) {
+            if (acc["account_id"] == 888) {
+                found = true;
+                assert(acc["balance"] == 2500.50);
+                assert(acc["user_id"] == 1);
+                break;
+            }
+        }
+        assert(found && "Account 888 must appear in accounts listing");
+    });
+
+    runTest("[API Account Creation] Created account can be retrieved via GET /api/v1/accounts/:id", [&]() {
+        auto res = client.Get("/api/v1/accounts/888");
+        assert(res != nullptr && res->status == 200);
+        auto j = json::parse(res->body);
+        assert(j["success"] == true);
+        assert(j["data"]["account_id"] == 888);
+        assert(j["data"]["user_id"] == 1);
+        assert(j["data"]["balance"] == 2500.50);
+        assert(j["data"]["owner_name"] == "Nitin");
+    });
+
+    runTest("[API Account Creation] Malformed JSON rejected with 400 Bad Request", [&]() {
+        auto res = client.Post("/api/v1/accounts", "{ not-valid-json }", "application/json");
+        assert(res != nullptr && res->status == 400);
+        auto j = json::parse(res->body);
+        assert(j["success"] == false);
+        assert(j["error"]["code"] == "MALFORMED_JSON");
+    });
+
+    runTest("[API Account Creation] Missing required fields (account_id or user_id) rejected with 400", [&]() {
+        // Missing user_id
+        json body1 = {{"account_id", 889}, {"initial_balance", 100.0}};
+        auto res1 = client.Post("/api/v1/accounts", body1.dump(), "application/json");
+        assert(res1 != nullptr && res1->status == 400);
+        auto j1 = json::parse(res1->body);
+        assert(j1["success"] == false);
+        assert(j1["error"]["code"] == "MISSING_REQUIRED_FIELD");
+
+        // Missing account_id
+        json body2 = {{"user_id", 1}, {"initial_balance", 100.0}};
+        auto res2 = client.Post("/api/v1/accounts", body2.dump(), "application/json");
+        assert(res2 != nullptr && res2->status == 400);
+        auto j2 = json::parse(res2->body);
+        assert(j2["success"] == false);
+        assert(j2["error"]["code"] == "MISSING_REQUIRED_FIELD");
+    });
+
+    runTest("[API Account Creation] Invalid field types and negative balances rejected", [&]() {
+        // Negative balance rejected with 422
+        json negBody = {{"account_id", 890}, {"user_id", 1}, {"initial_balance", -50.0}};
+        auto res1 = client.Post("/api/v1/accounts", negBody.dump(), "application/json");
+        assert(res1 != nullptr && res1->status == 422);
+        auto j1 = json::parse(res1->body);
+        assert(j1["error"]["code"] == "INVALID_INITIAL_BALANCE");
+
+        // Invalid account_id type (array)
+        json invalidType = {{"account_id", json::array({1, 2})}, {"user_id", 1}};
+        auto res2 = client.Post("/api/v1/accounts", invalidType.dump(), "application/json");
+        assert(res2 != nullptr && res2->status == 400);
+        auto j2 = json::parse(res2->body);
+        assert(j2["error"]["code"] == "INVALID_FIELD_TYPE");
+
+        // Non-existent user_id rejected with 404
+        json badUser = {{"account_id", 891}, {"user_id", 99999}};
+        auto res3 = client.Post("/api/v1/accounts", badUser.dump(), "application/json");
+        assert(res3 != nullptr && res3->status == 404);
+        auto j3 = json::parse(res3->body);
+        assert(j3["error"]["code"] == "USER_NOT_FOUND");
+    });
+
+    runTest("[API Account Creation] Duplicate account identifier rejected with 409 Conflict", [&]() {
+        // Account 888 was created; attempting duplicate must return 409
+        json dupBody = {{"account_id", 888}, {"user_id", 2}, {"initial_balance", 500.0}};
+        auto res = client.Post("/api/v1/accounts", dupBody.dump(), "application/json");
+        assert(res != nullptr && res->status == 409);
+        auto j = json::parse(res->body);
+        assert(j["success"] == false);
+        assert(j["error"]["code"] == "ACCOUNT_EXISTS");
+    });
+
+    runTest("[API Account Creation] Failed operation (e.g. invalid user) leaves no partial account", [&]() {
+        adminDb.executeQuery("DELETE FROM accounts WHERE account_id = 899;");
+        json failBody = {{"account_id", 899}, {"user_id", 99999}, {"initial_balance", 100.0}};
+        auto res = client.Post("/api/v1/accounts", failBody.dump(), "application/json");
+        assert(res != nullptr && res->status == 404);
+
+        // Verify account 899 was never created in MySQL
+        assert(!adminDb.accountExists(899) && "Account 899 must not exist in database");
+    });
+
+    runTest("[API Account Creation] Newly created account participates in transactions (transfer/deposit/withdraw)", [&]() {
+        // Create second account 889 to receive transfer
+        adminDb.executeQuery("DELETE FROM accounts WHERE account_id = 889;");
+        json body889 = {{"account_id", 889}, {"user_id", 2}, {"initial_balance", 1000.00}};
+        auto create889 = client.Post("/api/v1/accounts", body889.dump(), "application/json");
+        assert(create889 != nullptr && create889->status == 201);
+
+        // Transfer from account 888 -> 889
+        json xfer = {{"from_account", 888}, {"to_account", 889}, {"amount", 500.0}};
+        auto xferRes = client.Post("/api/v1/transactions/transfer", xfer.dump(), "application/json");
+        assert(xferRes != nullptr && xferRes->status == 200);
+
+        // Verify balance after transfer: 2500.50 - 500.00 = 2000.50, and 889 = 1500.00
+        auto bal1 = adminDb.getAccountBalance(888).value_or(0.0);
+        assert(bal1 == 2000.50);
+        auto bal889 = adminDb.getAccountBalance(889).value_or(0.0);
+        assert(bal889 == 1500.00);
+
+        // Deposit into account 888: 2000.50 + 300.00 = 2300.50
+        json dep = {{"account_id", 888}, {"amount", 300.0}};
+        auto depRes = client.Post("/api/v1/transactions/deposit", dep.dump(), "application/json");
+        assert(depRes != nullptr && depRes->status == 200);
+        auto bal2 = adminDb.getAccountBalance(888).value_or(0.0);
+        assert(bal2 == 2300.50);
+
+        // Withdraw from account 888: 2300.50 - 100.50 = 2200.00
+        json with = {{"account_id", 888}, {"amount", 100.50}};
+        auto withRes = client.Post("/api/v1/transactions/withdraw", with.dump(), "application/json");
+        assert(withRes != nullptr && withRes->status == 200);
+        auto bal3 = adminDb.getAccountBalance(888).value_or(0.0);
+        assert(bal3 == 2200.00);
+
+        // Clean up test accounts 888 and 889
+        adminDb.executeQuery("DELETE FROM transaction_logs WHERE transaction_id IN (SELECT transaction_id FROM transactions WHERE sender_account IN (888, 889) OR receiver_account IN (888, 889));");
+        adminDb.executeQuery("DELETE FROM transactions WHERE sender_account IN (888, 889) OR receiver_account IN (888, 889);");
+        adminDb.executeQuery("DELETE FROM accounts WHERE account_id IN (888, 889);");
     });
 
     // ==========================================
@@ -838,6 +997,352 @@ int main() {
         assert(recOpt.has_value());
         assert(recOpt->status == "FAILED");
         assert(recOpt->responseCode == 500);
+    });
+
+    // ==========================================
+    // 9. Connection Pool Tests (Task 5)
+    // ==========================================
+
+    runTest("[Connection Pool 1] Connection reuse: preserve underlying connection handle across leases", [&]() {
+        paylock::DatabaseConfig poolCfg = dbConfig;
+        poolCfg.poolSize = 2;
+        poolCfg.poolTimeoutMs = 2000;
+        paylock::ConnectionPool pool(poolCfg);
+
+        paylock::DatabaseManager* firstPtr = nullptr;
+        {
+            auto lease1 = pool.acquire();
+            firstPtr = lease1.get();
+            assert(firstPtr != nullptr);
+            assert(firstPtr->isConnected());
+            auto metrics = pool.getMetrics();
+            assert(metrics.inUse == 1);
+            assert(metrics.available == 0);
+        } // lease1 returned here
+
+        auto metricsAfterReturn = pool.getMetrics();
+        assert(metricsAfterReturn.inUse == 0);
+        assert(metricsAfterReturn.available == 1);
+
+        {
+            auto lease2 = pool.acquire();
+            paylock::DatabaseManager* secondPtr = lease2.get();
+            // Same instance returned from pool
+            assert(secondPtr == firstPtr);
+            assert(secondPtr->isConnected());
+            auto metrics = pool.getMetrics();
+            assert(metrics.inUse == 1);
+            assert(metrics.totalAcquisitions == 2);
+        }
+    });
+
+    runTest("[Connection Pool 2] Pool bounds: connections do not exceed configured maximum", [&]() {
+        const size_t MAX_CAP = 3;
+        paylock::DatabaseConfig poolCfg = dbConfig;
+        poolCfg.poolSize = MAX_CAP;
+        poolCfg.poolTimeoutMs = 2000;
+        paylock::ConnectionPool pool(poolCfg);
+
+        std::vector<paylock::PooledConnection> leases;
+        for (size_t i = 0; i < MAX_CAP; ++i) {
+            leases.push_back(pool.acquire());
+        }
+
+        auto metrics = pool.getMetrics();
+        assert(metrics.maxCapacity == MAX_CAP);
+        assert(metrics.inUse == MAX_CAP);
+        assert(metrics.available == 0);
+        assert(metrics.totalCreated <= MAX_CAP);
+
+        // Verify that all leased pointers are distinct
+        for (size_t i = 0; i < leases.size(); ++i) {
+            for (size_t j = i + 1; j < leases.size(); ++j) {
+                assert(leases[i].get() != leases[j].get());
+            }
+        }
+    });
+
+    runTest("[Connection Pool 3] Concurrent acquisition across worker threads without race conditions", [&]() {
+        const size_t POOL_SZ = 4;
+        paylock::DatabaseConfig poolCfg = dbConfig;
+        poolCfg.poolSize = POOL_SZ;
+        poolCfg.poolTimeoutMs = 3000;
+        paylock::ConnectionPool pool(poolCfg);
+
+        const int NUM_THREADS = 8;
+        std::vector<std::thread> threads;
+        std::atomic<int> successCount{0};
+        std::atomic<int> collisionDetected{0};
+
+        std::mutex seenMutex;
+        std::unordered_set<paylock::DatabaseManager*> currentlyHeld;
+
+        for (int i = 0; i < NUM_THREADS; ++i) {
+            threads.emplace_back([&]() {
+                for (int iter = 0; iter < 10; ++iter) {
+                    try {
+                        auto lease = pool.acquire(std::chrono::milliseconds(2000));
+                        paylock::DatabaseManager* ptr = lease.get();
+                        {
+                            std::lock_guard<std::mutex> lock(seenMutex);
+                            if (currentlyHeld.count(ptr) > 0) {
+                                collisionDetected++;
+                            }
+                            currentlyHeld.insert(ptr);
+                        }
+                        // Simulate query work
+                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                        {
+                            std::lock_guard<std::mutex> lock(seenMutex);
+                            currentlyHeld.erase(ptr);
+                        }
+                        successCount++;
+                    } catch (...) {}
+                }
+            });
+        }
+
+        for (auto& t : threads) {
+            t.join();
+        }
+
+        assert(collisionDetected == 0 && "Zero connections simultaneously leased to multiple threads");
+        assert(successCount > 0);
+        auto metrics = pool.getMetrics();
+        assert(metrics.inUse == 0);
+        assert(metrics.totalCreated <= POOL_SZ);
+    });
+
+    runTest("[Connection Pool 4] Wait & timeout behavior on pool exhaustion", [&]() {
+        const size_t POOL_SZ = 2;
+        paylock::DatabaseConfig poolCfg = dbConfig;
+        poolCfg.poolSize = POOL_SZ;
+        poolCfg.poolTimeoutMs = 200;
+        paylock::ConnectionPool pool(poolCfg);
+
+        auto lease1 = pool.acquire();
+        auto lease2 = pool.acquire();
+
+        bool timedOut = false;
+        try {
+            // Attempt to acquire third connection when pool has capacity 2 and timeout 150ms
+            auto lease3 = pool.acquire(std::chrono::milliseconds(150));
+            (void)lease3;
+        } catch (const std::runtime_error& ex) {
+            timedOut = true;
+            std::string msg = ex.what();
+            assert(msg.find("Connection pool exhausted") != std::string::npos);
+        }
+        assert(timedOut && "Timed out acquisition must throw runtime_error");
+
+        auto metrics = pool.getMetrics();
+        assert(metrics.acquisitionFailures >= 1);
+        assert(metrics.inUse == 2);
+    });
+
+    runTest("[Connection Pool 5] Rollback & session reset preserves clean state for next borrower", [&]() {
+        paylock::DatabaseConfig poolCfg = dbConfig;
+        poolCfg.poolSize = 1;
+        poolCfg.poolTimeoutMs = 2000;
+        paylock::ConnectionPool pool(poolCfg);
+
+        double initial101 = adminDb.getAccountBalance(101).value_or(0.0);
+
+        // Borrower 1 opens transaction, modifies balance, but DOES NOT commit
+        {
+            auto lease1 = pool.acquire();
+            lease1->beginTransaction();
+            lease1->debitAccount(101, 500.0);
+            // lease1 goes out of scope without commit or rollback
+        }
+
+        // Verify with adminDb that balance was NOT committed
+        double cur101 = adminDb.getAccountBalance(101).value_or(0.0);
+        assert(cur101 == initial101 && "Uncommitted transaction must be rolled back by pool reset");
+
+        // Borrower 2 acquires connection and performs query cleanly
+        {
+            auto lease2 = pool.acquire();
+            auto bal = lease2->getAccountBalance(101);
+            assert(bal.has_value() && bal.value() == initial101);
+        }
+    });
+
+    runTest("[Connection Pool 6] Broken connection recovery and automatic replacement", [&]() {
+        paylock::DatabaseConfig poolCfg = dbConfig;
+        poolCfg.poolSize = 2;
+        poolCfg.poolTimeoutMs = 2000;
+        paylock::ConnectionPool pool(poolCfg);
+
+        // Borrower acquires and intentionally disconnects connection
+        {
+            auto lease1 = pool.acquire();
+            lease1->disconnect();
+            assert(!lease1->isConnected());
+            // lease1 goes out of scope and is returned to pool
+        }
+
+        // Next borrower acquires: pool ping must detect disconnected state, discard it,
+        // and create a healthy new connection
+        {
+            auto lease2 = pool.acquire();
+            assert(lease2->isConnected() && "Pool must heal by replacing broken connection");
+            auto bal = lease2->getAccountBalance(101);
+            assert(bal.has_value());
+        }
+    });
+
+    runTest("[Connection Pool 7] Stress testing under multithreaded load with zero data races", [&]() {
+        const size_t POOL_SZ = 5;
+        paylock::DatabaseConfig poolCfg = dbConfig;
+        poolCfg.poolSize = POOL_SZ;
+        poolCfg.poolTimeoutMs = 3000;
+        paylock::ConnectionPool pool(poolCfg);
+
+        const int NUM_THREADS = 8;
+        const int OPS_PER_THREAD = 25;
+        std::vector<std::thread> threads;
+        std::atomic<int> completedOps{0};
+
+        for (int t = 0; t < NUM_THREADS; ++t) {
+            threads.emplace_back([&]() {
+                for (int i = 0; i < OPS_PER_THREAD; ++i) {
+                    try {
+                        auto lease = pool.acquire(std::chrono::milliseconds(2000));
+                        auto acc = lease->getAccountById(101);
+                        assert(acc.has_value());
+                        completedOps++;
+                    } catch (...) {}
+                }
+            });
+        }
+
+        for (auto& th : threads) {
+            th.join();
+        }
+
+        assert(completedOps == NUM_THREADS * OPS_PER_THREAD);
+        auto metrics = pool.getMetrics();
+        assert(metrics.inUse == 0);
+        assert(metrics.totalAcquisitions >= static_cast<size_t>(NUM_THREADS * OPS_PER_THREAD));
+    });
+
+    runTest("[Connection Pool 8] Payment transaction integration with Strict 2PL & idempotency", [&]() {
+        json transferPayload = {
+            {"from_account", 101},
+            {"to_account", 102},
+            {"amount", 100.0}
+        };
+        httplib::Headers headers = {{"Idempotency-Key", "pooled-tx-key-101"}};
+
+        auto res1 = client.Post("/api/v1/transactions/transfer", headers, transferPayload.dump(), "application/json");
+        assert(res1 != nullptr && res1->status == 200);
+
+        // Replay same idempotency key through pool
+        auto res2 = client.Post("/api/v1/transactions/transfer", headers, transferPayload.dump(), "application/json");
+        assert(res2 != nullptr && res2->status == 200);
+        assert(res2->has_header("Idempotent-Replayed"));
+
+        // Deposit through pool
+        json depPayload = {{"account_id", 101}, {"amount", 250.0}};
+        httplib::Headers depHeaders = {{"Idempotency-Key", "pooled-dep-key-101"}};
+        auto res3 = client.Post("/api/v1/transactions/deposit", depHeaders, depPayload.dump(), "application/json");
+        assert(res3 != nullptr && res3->status == 200);
+
+        // Withdraw through pool
+        json withPayload = {{"account_id", 101}, {"amount", 150.0}};
+        httplib::Headers withHeaders = {{"Idempotency-Key", "pooled-with-key-101"}};
+        auto res4 = client.Post("/api/v1/transactions/withdraw", withHeaders, withPayload.dump(), "application/json");
+        assert(res4 != nullptr && res4->status == 200);
+    });
+
+    runTest("[Connection Pool 9] Stats endpoint reports accurate database pool telemetry", [&]() {
+        auto res = client.Get("/api/v1/system/stats");
+        assert(res != nullptr && res->status == 200);
+
+        json j = json::parse(res->body);
+        assert(j["success"] == true);
+        assert(j["data"].contains("database_pool"));
+        auto poolInfo = j["data"]["database_pool"];
+        assert(poolInfo.contains("max_capacity"));
+        assert(poolInfo.contains("total_connections"));
+        assert(poolInfo.contains("in_use"));
+        assert(poolInfo.contains("available"));
+        assert(poolInfo.contains("waiting_requests"));
+        assert(poolInfo.contains("acquisition_failures"));
+        assert(poolInfo.contains("total_acquisitions"));
+
+        assert(poolInfo["max_capacity"].get<int>() > 0);
+        assert(poolInfo["total_acquisitions"].get<int>() > 0);
+    });
+
+    runTest("[Connection Pool 10] Graceful shutdown ensures clean termination without crash or leak", [&]() {
+        paylock::DatabaseConfig poolCfg = dbConfig;
+        poolCfg.poolSize = 2;
+        poolCfg.poolTimeoutMs = 2000;
+        auto testPool = std::make_shared<paylock::ConnectionPool>(poolCfg);
+
+        // Lease connection
+        auto lease = testPool->acquire();
+        assert(lease->isConnected());
+
+        // Shutdown pool while connection is out
+        testPool->shutdown();
+
+        // Release lease
+        lease.reset();
+
+        // Further acquisitions throw shutting down exception
+        bool shutdownCaught = false;
+        try {
+            auto leaseAfter = testPool->acquire();
+            (void)leaseAfter;
+        } catch (const std::runtime_error& ex) {
+            shutdownCaught = true;
+            std::string msg = ex.what();
+            assert(msg.find("shutting down") != std::string::npos);
+        }
+        assert(shutdownCaught);
+    });
+
+    runTest("[Performance Benchmark] Connection pool vs unpooled per-request latency comparison", [&]() {
+        const int ITERATIONS = 30;
+
+        // 1. Measure unpooled per-request connection latency
+        auto startUnpooled = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < ITERATIONS; ++i) {
+            paylock::DatabaseManager directDb(dbConfig);
+            directDb.connect();
+            directDb.executeQuery("SELECT 1;");
+            directDb.disconnect();
+        }
+        auto endUnpooled = std::chrono::high_resolution_clock::now();
+        double unpooledMs = std::chrono::duration<double, std::milli>(endUnpooled - startUnpooled).count();
+
+        // 2. Measure pooled connection latency
+        paylock::DatabaseConfig poolCfg = dbConfig;
+        poolCfg.poolSize = 4;
+        poolCfg.poolTimeoutMs = 3000;
+        paylock::ConnectionPool benchPool(poolCfg, 4);
+
+        auto startPooled = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < ITERATIONS; ++i) {
+            auto lease = benchPool.acquire();
+            lease->executeQuery("SELECT 1;");
+        }
+        auto endPooled = std::chrono::high_resolution_clock::now();
+        double pooledMs = std::chrono::duration<double, std::milli>(endPooled - startPooled).count();
+
+        double speedup = (pooledMs > 0.0) ? (unpooledMs / pooledMs) : 1.0;
+        std::cout << "\n    ================ PERFORMANCE COMPARISON ================\n"
+                  << "    Iterations:                      " << ITERATIONS << " queries\n"
+                  << "    Unpooled (connect/close per op): " << std::fixed << std::setprecision(2) << unpooledMs << " ms ("
+                  << (unpooledMs / ITERATIONS) << " ms/op)\n"
+                  << "    Pooled (connection reuse):       " << std::fixed << std::setprecision(2) << pooledMs << " ms ("
+                  << (pooledMs / ITERATIONS) << " ms/op)\n"
+                  << "    Speedup:                         " << std::fixed << std::setprecision(2) << speedup << "x faster\n"
+                  << "    ========================================================\n    ";
+        assert(speedup >= 1.0 && "Pooled execution should be as fast or faster than re-connecting per query");
     });
 
     runTest("[API Shutdown] Server stop terminates background thread cleanly", [&]() {

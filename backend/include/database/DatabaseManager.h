@@ -47,6 +47,8 @@ struct DatabaseConfig {
     std::string database{"paylock_db"};
     unsigned int port{3306};
     std::string socketPath{""};
+    size_t poolSize{10};
+    unsigned int poolTimeoutMs{3000};
 
     static DatabaseConfig fromEnvOrDefault();
 };
@@ -84,6 +86,8 @@ public:
     void disconnect() noexcept;
     bool isConnected() noexcept;
     MYSQL* getRawConnection() noexcept;
+    bool resetSession() noexcept;
+    bool ping() noexcept;
 
     // Day 1 Operations:
     int createUser(const std::string& name, const std::string& email);
@@ -91,6 +95,7 @@ public:
     std::optional<double> getAccountBalance(int accountId);
     std::optional<Account> getAccountById(int accountId);
     bool accountExists(int accountId);
+    bool userExists(int userId);
     std::vector<Account> listAccounts();
     std::vector<Transaction> listTransactions();
     int recordTransaction(int senderAccount, int receiverAccount, double amount, const std::string& status = "PENDING");

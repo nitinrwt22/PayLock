@@ -17,14 +17,16 @@ ApiController::ApiController(DatabaseConfig dbConfig,
                              RecoveryManager& recoveryManager,
                              ResourceManager& resourceManager,
                              PagingSimulator& pagingSimulator,
-                             ConcurrencyManager* concurrencyManager)
+                             ConcurrencyManager* concurrencyManager,
+                             std::shared_ptr<ConnectionPool> pool)
     : dbConfig_(std::move(dbConfig)),
       adminDb_(adminDb),
       lockManager_(lockManager),
       recoveryManager_(recoveryManager),
       resourceManager_(resourceManager),
       pagingSimulator_(pagingSimulator),
-      concurrencyManager_(concurrencyManager) {
+      concurrencyManager_(concurrencyManager),
+      pool_(pool ? std::move(pool) : std::make_shared<ConnectionPool>(dbConfig_)) {
     try {
         adminDb_.ensureIdempotencyTableExists();
         adminDb_.cleanupOrphanedProcessingRecords();
@@ -40,7 +42,7 @@ std::optional<int> ApiController::parseAccountId(const nlohmann::json& j, const 
     }
     if (j[key].is_string()) {
         std::string str = j[key].get<std::string>();
-        if (!str.empty() && (str[0] == 'A' || str[0] == 'a')) {
+        if (!str.empty() && (str[0] == 'A' || str[0] == 'a' || str[0] == 'U' || str[0] == 'u')) {
             str = str.substr(1);
         }
         try {
@@ -69,6 +71,10 @@ void ApiController::registerRoutes(httplib::Server& server) {
 
     server.Get(R"(/api/v1/accounts/([^/]+))", [this](const httplib::Request& req, httplib::Response& res) {
         handleGetAccount(req, res);
+    });
+
+    server.Post("/api/v1/accounts", [this](const httplib::Request& req, httplib::Response& res) {
+        handleCreateAccount(req, res);
     });
 
     // --- Transactions ---
@@ -140,7 +146,7 @@ void ApiController::registerRoutes(httplib::Server& server) {
 void ApiController::handleHealth(const httplib::Request& /*req*/, httplib::Response& res) {
     bool dbConnected = false;
     try {
-        dbConnected = adminDb_.isConnected();
+        dbConnected = adminDb_.isConnected() && (pool_ && pool_->isHealthy());
     } catch (...) {
         dbConnected = false;
     }
@@ -153,6 +159,8 @@ void ApiController::handleHealth(const httplib::Request& /*req*/, httplib::Respo
         return;
     }
 
+    auto poolMetrics = pool_ ? pool_->getMetrics() : PoolMetrics{};
+
     nlohmann::json data;
     data["status"] = "healthy";
     data["server"] = "healthy";
@@ -163,7 +171,12 @@ void ApiController::handleHealth(const httplib::Request& /*req*/, httplib::Respo
         {"type", "MySQL 9.x (InnoDB)"},
         {"host", dbConfig_.host},
         {"port", dbConfig_.port},
-        {"database", dbConfig_.database}
+        {"database", dbConfig_.database},
+        {"pool", {
+            {"max_capacity", poolMetrics.maxCapacity},
+            {"available", poolMetrics.available},
+            {"in_use", poolMetrics.inUse}
+        }}
     };
     data["services"] = {
         {"transaction_engine", "READY"},
@@ -172,7 +185,8 @@ void ApiController::handleHealth(const httplib::Request& /*req*/, httplib::Respo
         {"deadlock_detector", "READY"},
         {"recovery_manager", "READY"},
         {"resource_manager", "READY"},
-        {"paging_simulator", "READY"}
+        {"paging_simulator", "READY"},
+        {"connection_pool", "READY"}
     };
 
     ApiResponse::sendSuccess(res, data, "PayLock API Server is healthy", 200);
@@ -180,8 +194,16 @@ void ApiController::handleHealth(const httplib::Request& /*req*/, httplib::Respo
 
 void ApiController::handleSystemStats(const httplib::Request& /*req*/, httplib::Response& res) {
     try {
-        auto accounts = adminDb_.listAccounts();
-        auto transactions = adminDb_.listTransactions();
+        std::vector<Account> accounts;
+        std::vector<Transaction> transactions;
+        if (pool_) {
+            auto lease = pool_->acquire();
+            accounts = lease->listAccounts();
+            transactions = lease->listTransactions();
+        } else {
+            accounts = adminDb_.listAccounts();
+            transactions = adminDb_.listTransactions();
+        }
 
         size_t committed = 0;
         size_t rolledBack = 0;
@@ -210,6 +232,7 @@ void ApiController::handleSystemStats(const httplib::Request& /*req*/, httplib::
 
         auto resSnap = resourceManager_.getSnapshot();
         auto pagingStats = pagingSimulator_.getStatistics();
+        auto poolMetrics = pool_ ? pool_->getMetrics() : PoolMetrics{};
 
         nlohmann::json data;
         data["transactions"] = {
@@ -241,6 +264,15 @@ void ApiController::handleSystemStats(const httplib::Request& /*req*/, httplib::
             {"hit_ratio", pagingStats.hitRatio},
             {"fault_ratio", pagingStats.faultRatio}
         };
+        data["database_pool"] = {
+            {"max_capacity", poolMetrics.maxCapacity},
+            {"total_connections", poolMetrics.totalCreated},
+            {"in_use", poolMetrics.inUse},
+            {"available", poolMetrics.available},
+            {"waiting_requests", poolMetrics.waitingRequests},
+            {"acquisition_failures", poolMetrics.acquisitionFailures},
+            {"total_acquisitions", poolMetrics.totalAcquisitions}
+        };
 
         ApiResponse::sendSuccess(res, data, "System statistics retrieved successfully", 200);
     } catch (const std::exception& ex) {
@@ -268,7 +300,13 @@ void ApiController::handleListAccounts(const httplib::Request& req, httplib::Res
     }
 
     try {
-        auto accounts = adminDb_.listAccounts();
+        std::vector<Account> accounts;
+        if (pool_) {
+            auto lease = pool_->acquire();
+            accounts = lease->listAccounts();
+        } else {
+            accounts = adminDb_.listAccounts();
+        }
         std::sort(accounts.begin(), accounts.end(), [](const Account& a, const Account& b) {
             return a.accountId < b.accountId;
         });
@@ -329,7 +367,13 @@ void ApiController::handleGetAccount(const httplib::Request& req, httplib::Respo
     }
 
     try {
-        auto acc = adminDb_.getAccountById(accountId);
+        std::optional<Account> acc;
+        if (pool_) {
+            auto lease = pool_->acquire();
+            acc = lease->getAccountById(accountId);
+        } else {
+            acc = adminDb_.getAccountById(accountId);
+        }
         if (!acc.has_value()) {
             ApiResponse::sendError(res, "ACCOUNT_NOT_FOUND", "Account with ID " + std::to_string(accountId) + " was not found", 404);
             return;
@@ -346,6 +390,145 @@ void ApiController::handleGetAccount(const httplib::Request& req, httplib::Respo
         ApiResponse::sendSuccess(res, data, "Account details retrieved", 200);
     } catch (const std::exception& ex) {
         ApiResponse::sendError(res, "DATABASE_ERROR", ex.what(), 500);
+    }
+}
+
+void ApiController::handleCreateAccount(const httplib::Request& req, httplib::Response& res) {
+    nlohmann::json body;
+    try {
+        body = nlohmann::json::parse(req.body);
+    } catch (...) {
+        ApiResponse::sendError(res, "MALFORMED_JSON", "Request body must be valid JSON", 400);
+        return;
+    }
+
+    if (!body.is_object()) {
+        ApiResponse::sendError(res, "INVALID_REQUEST", "Request body must be a JSON object", 400);
+        return;
+    }
+
+    // Required fields based on schema: account_id and user_id
+    bool hasAccountId = body.contains("account_id") || body.contains("id");
+    bool hasUserId = body.contains("user_id");
+
+    if (!hasAccountId || !hasUserId) {
+        std::string missing;
+        if (!hasAccountId && !hasUserId) missing = "account_id, user_id";
+        else if (!hasAccountId) missing = "account_id";
+        else missing = "user_id";
+        ApiResponse::sendError(res, "MISSING_REQUIRED_FIELD", "Required fields missing: " + missing, 400);
+        return;
+    }
+
+    // Validate account_id type and numeric value
+    std::string accKey = body.contains("account_id") ? "account_id" : "id";
+    const auto& accField = body[accKey];
+    if (!accField.is_number_integer() && !accField.is_string()) {
+        ApiResponse::sendError(res, "INVALID_FIELD_TYPE", "Field '" + accKey + "' must be an integer or numeric string", 400);
+        return;
+    }
+    auto accOpt = parseAccountId(body, accKey);
+    if (!accOpt.has_value() || accOpt.value() <= 0) {
+        ApiResponse::sendError(res, "INVALID_ACCOUNT_ID", "Account ID must be a positive integer", 422);
+        return;
+    }
+    int accountId = accOpt.value();
+
+    // Validate user_id type and numeric value
+    const auto& userField = body["user_id"];
+    if (!userField.is_number_integer() && !userField.is_string()) {
+        ApiResponse::sendError(res, "INVALID_FIELD_TYPE", "Field 'user_id' must be an integer or numeric string", 400);
+        return;
+    }
+    auto userOpt = parseAccountId(body, "user_id");
+    if (!userOpt.has_value() || userOpt.value() <= 0) {
+        ApiResponse::sendError(res, "INVALID_USER_ID", "User ID must be a positive integer", 422);
+        return;
+    }
+    int userId = userOpt.value();
+
+    // Validate initial_balance / balance (optional, default 0.00)
+    double initialBalance = 0.00;
+    std::string balKey = body.contains("initial_balance") ? "initial_balance" : (body.contains("balance") ? "balance" : "");
+    if (!balKey.empty()) {
+        const auto& balField = body[balKey];
+        if (!balField.is_number()) {
+            ApiResponse::sendError(res, "INVALID_FIELD_TYPE", "Field '" + balKey + "' must be a numerical value", 400);
+            return;
+        }
+        initialBalance = balField.get<double>();
+        if (!std::isfinite(initialBalance) || initialBalance < 0.00) {
+            ApiResponse::sendError(res, "INVALID_INITIAL_BALANCE", "Initial balance must be non-negative", 422);
+            return;
+        }
+        if (initialBalance > 100000000.00) {
+            ApiResponse::sendError(res, "INVALID_INITIAL_BALANCE", "Initial balance exceeds maximum allowed limit", 422);
+            return;
+        }
+    }
+
+    try {
+        auto lease = pool_->acquire();
+        DatabaseManager& db = *lease;
+
+        // Check if account already exists
+        if (db.accountExists(accountId)) {
+            ApiResponse::sendError(res, "ACCOUNT_EXISTS",
+                "Account #" + std::to_string(accountId) + " already exists", 409);
+            return;
+        }
+
+        // Check if user exists
+        if (!db.userExists(userId)) {
+            ApiResponse::sendError(res, "USER_NOT_FOUND",
+                "User #" + std::to_string(userId) + " does not exist", 404);
+            return;
+        }
+
+        // Execute creation
+        db.createAccount(accountId, userId, initialBalance);
+
+        // Fetch newly created account
+        auto created = db.getAccountById(accountId);
+        if (!created.has_value()) {
+            ApiResponse::sendError(res, "DATABASE_ERROR", "Account was created but could not be retrieved", 500);
+            return;
+        }
+
+        nlohmann::json data = {
+            {"account_id", created->accountId},
+            {"user_id", created->userId},
+            {"owner_name", created->ownerName},
+            {"balance", created->balance},
+            {"created_at", created->createdAt}
+        };
+
+        ApiResponse::sendSuccess(res, data, "Account created successfully", 201);
+    } catch (const DatabaseException& ex) {
+        if (ex.getErrorCode() == 1062) {
+            ApiResponse::sendError(res, "ACCOUNT_EXISTS",
+                "Account #" + std::to_string(accountId) + " already exists", 409);
+            return;
+        }
+        if (ex.getErrorCode() == 1452) {
+            ApiResponse::sendError(res, "USER_NOT_FOUND",
+                "User #" + std::to_string(userId) + " does not exist", 404);
+            return;
+        }
+        if (ex.getErrorCode() == 3819) {
+            ApiResponse::sendError(res, "INVALID_INITIAL_BALANCE",
+                "Initial balance violates database constraint", 422);
+            return;
+        }
+        ApiResponse::sendError(res, "DATABASE_ERROR", "Failed to create account: " + std::string(ex.what()), 500);
+    } catch (const std::exception& ex) {
+        std::string errMsg = ex.what();
+        if (errMsg.find("Connection pool exhausted") != std::string::npos) {
+            ApiResponse::sendError(res, "SERVICE_UNAVAILABLE",
+                "Server busy: database connection pool exhausted. Please retry shortly.", 503);
+            return;
+        }
+        ApiResponse::sendError(res, "INTERNAL_ERROR", errMsg, 500);
     }
 }
 
@@ -377,9 +560,17 @@ void ApiController::handleListTransactions(const httplib::Request& req, httplib:
     }
 
     try {
-        auto allTx = (accountFilter > 0)
-            ? adminDb_.getTransactionsForAccount(accountFilter)
-            : adminDb_.listTransactions();
+        std::vector<Transaction> allTx;
+        if (pool_) {
+            auto lease = pool_->acquire();
+            allTx = (accountFilter > 0)
+                ? lease->getTransactionsForAccount(accountFilter)
+                : lease->listTransactions();
+        } else {
+            allTx = (accountFilter > 0)
+                ? adminDb_.getTransactionsForAccount(accountFilter)
+                : adminDb_.listTransactions();
+        }
 
         std::vector<Transaction> filtered;
         for (const auto& tx : allTx) {
@@ -450,13 +641,26 @@ void ApiController::handleGetTransaction(const httplib::Request& req, httplib::R
     }
 
     try {
-        auto tx = adminDb_.getTransactionById(txId);
+        std::optional<Transaction> tx;
+        std::vector<TransactionLog> logs;
+        if (pool_) {
+            auto lease = pool_->acquire();
+            tx = lease->getTransactionById(txId);
+            if (tx.has_value()) {
+                logs = lease->listTransactionLogs(txId);
+            }
+        } else {
+            tx = adminDb_.getTransactionById(txId);
+            if (tx.has_value()) {
+                logs = adminDb_.listTransactionLogs(txId);
+            }
+        }
+
         if (!tx.has_value()) {
             ApiResponse::sendError(res, "TRANSACTION_NOT_FOUND", "Transaction with ID " + std::to_string(txId) + " was not found", 404);
             return;
         }
 
-        auto logs = adminDb_.listTransactionLogs(txId);
         nlohmann::json logArray = nlohmann::json::array();
         for (const auto& log : logs) {
             logArray.push_back({
@@ -538,25 +742,20 @@ void ApiController::handleTransfer(const httplib::Request& req, httplib::Respons
         return;
     }
 
-    // Verify existence of accounts
+    // Execute transfer using pooled connection
     try {
-        if (!adminDb_.accountExists(fromAccount)) {
+        auto lease = pool_->acquire();
+        DatabaseManager& requestDb = *lease;
+
+        // Verify existence of accounts
+        if (!requestDb.accountExists(fromAccount)) {
             ApiResponse::sendError(res, "SENDER_ACCOUNT_NOT_FOUND", "Sender account #" + std::to_string(fromAccount) + " does not exist", 404);
             return;
         }
-        if (!adminDb_.accountExists(toAccount)) {
+        if (!requestDb.accountExists(toAccount)) {
             ApiResponse::sendError(res, "RECEIVER_ACCOUNT_NOT_FOUND", "Receiver account #" + std::to_string(toAccount) + " does not exist", 404);
             return;
         }
-    } catch (const std::exception& ex) {
-        ApiResponse::sendError(res, "DATABASE_ERROR", ex.what(), 500);
-        return;
-    }
-
-    // Execute transfer on dedicated per-request MySQL connection
-    try {
-        DatabaseManager requestDb(dbConfig_);
-        requestDb.connect();
 
         if (!idempotencyKey.empty()) {
             std::string canonical = IdempotencyManager::buildTransferPayload(fromAccount, toAccount, amount);
@@ -623,15 +822,19 @@ void ApiController::handleTransfer(const httplib::Request& req, httplib::Respons
             res.body = resBody;
         }
     } catch (const std::exception& ex) {
+        std::string errMsg = ex.what();
+        if (errMsg.find("Connection pool exhausted") != std::string::npos) {
+            ApiResponse::sendError(res, "SERVICE_UNAVAILABLE", "Server busy: database connection pool exhausted. Please retry shortly.", 503);
+            return;
+        }
         if (!idempotencyKey.empty()) {
             try {
-                DatabaseManager cleanupDb(dbConfig_);
-                cleanupDb.connect();
-                std::string errRes = ApiResponse::buildErrorJson("INTERNAL_ERROR", "Transfer failed: " + std::string(ex.what()));
-                IdempotencyManager::recordFailed(cleanupDb, idempotencyKey, 500, errRes);
+                auto cleanupLease = pool_->acquire(std::chrono::milliseconds(1000));
+                std::string errRes = ApiResponse::buildErrorJson("INTERNAL_ERROR", "Transfer failed: " + errMsg);
+                IdempotencyManager::recordFailed(*cleanupLease, idempotencyKey, 500, errRes);
             } catch (...) {}
         }
-        ApiResponse::sendError(res, "INTERNAL_ERROR", "Transaction failed: " + std::string(ex.what()), 500);
+        ApiResponse::sendError(res, "INTERNAL_ERROR", "Transaction failed: " + errMsg, 500);
     }
 }
 
@@ -669,13 +872,13 @@ void ApiController::handleDeposit(const httplib::Request& req, httplib::Response
     }
 
     try {
-        if (!adminDb_.accountExists(accountId)) {
+        auto lease = pool_->acquire();
+        DatabaseManager& requestDb = *lease;
+
+        if (!requestDb.accountExists(accountId)) {
             ApiResponse::sendError(res, "ACCOUNT_NOT_FOUND", "Account #" + std::to_string(accountId) + " does not exist", 404);
             return;
         }
-
-        DatabaseManager requestDb(dbConfig_);
-        requestDb.connect();
 
         if (!idempotencyKey.empty()) {
             std::string canonical = IdempotencyManager::buildDepositPayload(accountId, amount);
@@ -741,15 +944,19 @@ void ApiController::handleDeposit(const httplib::Request& req, httplib::Response
             res.body = resBody;
         }
     } catch (const std::exception& ex) {
+        std::string errMsg = ex.what();
+        if (errMsg.find("Connection pool exhausted") != std::string::npos) {
+            ApiResponse::sendError(res, "SERVICE_UNAVAILABLE", "Server busy: database connection pool exhausted. Please retry shortly.", 503);
+            return;
+        }
         if (!idempotencyKey.empty()) {
             try {
-                DatabaseManager cleanupDb(dbConfig_);
-                cleanupDb.connect();
-                std::string errRes = ApiResponse::buildErrorJson("INTERNAL_ERROR", "Deposit failed: " + std::string(ex.what()));
-                IdempotencyManager::recordFailed(cleanupDb, idempotencyKey, 500, errRes);
+                auto cleanupLease = pool_->acquire(std::chrono::milliseconds(1000));
+                std::string errRes = ApiResponse::buildErrorJson("INTERNAL_ERROR", "Deposit failed: " + errMsg);
+                IdempotencyManager::recordFailed(*cleanupLease, idempotencyKey, 500, errRes);
             } catch (...) {}
         }
-        ApiResponse::sendError(res, "INTERNAL_ERROR", ex.what(), 500);
+        ApiResponse::sendError(res, "INTERNAL_ERROR", errMsg, 500);
     }
 }
 
@@ -787,13 +994,13 @@ void ApiController::handleWithdraw(const httplib::Request& req, httplib::Respons
     }
 
     try {
-        if (!adminDb_.accountExists(accountId)) {
+        auto lease = pool_->acquire();
+        DatabaseManager& requestDb = *lease;
+
+        if (!requestDb.accountExists(accountId)) {
             ApiResponse::sendError(res, "ACCOUNT_NOT_FOUND", "Account #" + std::to_string(accountId) + " does not exist", 404);
             return;
         }
-
-        DatabaseManager requestDb(dbConfig_);
-        requestDb.connect();
 
         if (!idempotencyKey.empty()) {
             std::string canonical = IdempotencyManager::buildWithdrawPayload(accountId, amount);
@@ -859,15 +1066,19 @@ void ApiController::handleWithdraw(const httplib::Request& req, httplib::Respons
             res.body = resBody;
         }
     } catch (const std::exception& ex) {
+        std::string errMsg = ex.what();
+        if (errMsg.find("Connection pool exhausted") != std::string::npos) {
+            ApiResponse::sendError(res, "SERVICE_UNAVAILABLE", "Server busy: database connection pool exhausted. Please retry shortly.", 503);
+            return;
+        }
         if (!idempotencyKey.empty()) {
             try {
-                DatabaseManager cleanupDb(dbConfig_);
-                cleanupDb.connect();
-                std::string errRes = ApiResponse::buildErrorJson("INTERNAL_ERROR", "Withdrawal failed: " + std::string(ex.what()));
-                IdempotencyManager::recordFailed(cleanupDb, idempotencyKey, 500, errRes);
+                auto cleanupLease = pool_->acquire(std::chrono::milliseconds(1000));
+                std::string errRes = ApiResponse::buildErrorJson("INTERNAL_ERROR", "Withdrawal failed: " + errMsg);
+                IdempotencyManager::recordFailed(*cleanupLease, idempotencyKey, 500, errRes);
             } catch (...) {}
         }
-        ApiResponse::sendError(res, "INTERNAL_ERROR", ex.what(), 500);
+        ApiResponse::sendError(res, "INTERNAL_ERROR", errMsg, 500);
     }
 }
 

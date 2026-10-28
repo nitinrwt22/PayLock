@@ -121,6 +121,14 @@ class PayLockApiClient {
     return res.data;
   }
 
+  async createAccount(payload) {
+    const res = await this._request('/accounts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return res;
+  }
+
   // 3. Transactions
   async getTransactions(limit = 50, offset = 0, status = '') {
     let liveTxns = [];

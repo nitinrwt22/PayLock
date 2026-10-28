@@ -4,6 +4,7 @@
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 #include "database/DatabaseManager.h"
+#include "database/ConnectionPool.h"
 #include "transaction/TransactionManager.h"
 #include "locking/LockManager.h"
 #include "deadlock/DeadlockDetector.h"
@@ -27,7 +28,18 @@ public:
                   RecoveryManager& recoveryManager,
                   ResourceManager& resourceManager,
                   PagingSimulator& pagingSimulator,
-                  ConcurrencyManager* concurrencyManager = nullptr);
+                  ConcurrencyManager* concurrencyManager = nullptr,
+                  std::shared_ptr<ConnectionPool> pool = nullptr);
+
+    /**
+     * @brief Returns a shared pointer to the MySQL Connection Pool.
+     */
+    std::shared_ptr<ConnectionPool> getConnectionPool() const noexcept { return pool_; }
+
+    /**
+     * @brief Gracefully terminates the connection pool upon server shutdown.
+     */
+    void shutdownPool() noexcept { if (pool_) pool_->shutdown(); }
 
     /**
      * @brief Registers all /api/v1 endpoints with the HTTP server.
@@ -43,6 +55,7 @@ public:
     // B. Accounts
     void handleListAccounts(const httplib::Request& req, httplib::Response& res);
     void handleGetAccount(const httplib::Request& req, httplib::Response& res);
+    void handleCreateAccount(const httplib::Request& req, httplib::Response& res);
 
     // C. Transactions
     void handleListTransactions(const httplib::Request& req, httplib::Response& res);
@@ -76,6 +89,7 @@ private:
     ResourceManager& resourceManager_;
     PagingSimulator& pagingSimulator_;
     ConcurrencyManager* concurrencyManager_{nullptr};
+    std::shared_ptr<ConnectionPool> pool_;
 
     // Helper to parse integer account ID from string or int in JSON
     static std::optional<int> parseAccountId(const nlohmann::json& j, const std::string& key);

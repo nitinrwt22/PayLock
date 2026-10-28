@@ -111,6 +111,7 @@ http://127.0.0.1:8080/api/v1
 | **System** | `GET` | `/api/v1/system/stats` | Aggregated metrics (Tx, Locks, Resources, Paging) | `200`, `500` |
 | **Accounts** | `GET` | `/api/v1/accounts` | Paginated account list from MySQL | `200`, `500` |
 | **Accounts** | `GET` | `/api/v1/accounts/:id` | Single account details & balance | `200`, `400`, `404` |
+| **Accounts** | `POST` | `/api/v1/accounts` | Create a new user account | `201`, `400`, `404`, `409`, `422`, `503` |
 | **Transactions** | `GET` | `/api/v1/transactions` | Filtered & paginated transaction history | `200`, `500` |
 | **Transactions** | `GET` | `/api/v1/transactions/:id`| Transaction details by ID | `200`, `400`, `404` |
 | **Transactions** | `POST` | `/api/v1/transactions/transfer` | Execute atomic 2PL transfer | `200`, `400`, `404`, `409`, `422` |
@@ -298,6 +299,46 @@ Retrieves a specific account. Accepts integer IDs (`101`) or formatted string ID
     }
   }
   ```
+
+#### `POST /api/v1/accounts`
+Creates a new account associated with an existing user in the database.
+
+- **Request Headers**:
+  - `Content-Type: application/json`
+- **Request Body Fields**:
+  - `account_id` (or `id`): *(Required)* Unique numeric account ID (integer or formatted string e.g. `106` or `"A106"`).
+  - `user_id`: *(Required)* Existing user's ID (integer or formatted string e.g. `1` or `"U1"`).
+  - `initial_balance` (or `balance`): *(Optional)* Non-negative numeric balance (default `0.00`).
+- **Sample Request**:
+  ```bash
+  curl -s -X POST http://127.0.0.1:8080/api/v1/accounts \
+    -H "Content-Type: application/json" \
+    -d '{
+      "account_id": 106,
+      "user_id": 1,
+      "initial_balance": 1500.00
+    }' | jq .
+  ```
+- **Response (`201 Created`)**:
+  ```json
+  {
+    "success": true,
+    "message": "Account created successfully",
+    "data": {
+      "account_id": 106,
+      "user_id": 1,
+      "owner_name": "Nitin",
+      "balance": 1500.0,
+      "created_at": "2026-10-29 00:25:00"
+    }
+  }
+  ```
+- **Error Responses**:
+  - `400 Bad Request`: Malformed JSON (`MALFORMED_JSON`), missing required fields (`MISSING_REQUIRED_FIELD`), or invalid types (`INVALID_FIELD_TYPE`).
+  - `404 Not Found`: Referenced user ID does not exist (`USER_NOT_FOUND`).
+  - `409 Conflict`: Account ID already exists (`ACCOUNT_EXISTS`).
+  - `422 Unprocessable Entity`: Negative initial balance (`INVALID_INITIAL_BALANCE`) or non-positive IDs (`INVALID_ACCOUNT_ID`, `INVALID_USER_ID`).
+  - `503 Service Unavailable`: Connection pool exhausted.
 
 ---
 
